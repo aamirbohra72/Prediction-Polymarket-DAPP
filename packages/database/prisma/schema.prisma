@@ -1,0 +1,291 @@
+generator client {
+  provider = "prisma-client-js"
+  // Package-local output avoids Windows EPERM locks on root node_modules/.prisma
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MarketStatus {
+  OPEN
+  CLOSED
+  RESOLVED
+}
+
+enum PriceCondition {
+  CLOSE_ABOVE
+  CLOSE_BELOW
+}
+
+enum Outcome {
+  YES
+  NO
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderStatus {
+  OPEN
+  FILLED
+  CANCELLED
+}
+
+enum TransactionType {
+  DEPOSIT_INITIAL
+  TRADE_BUY
+  TRADE_SELL
+  RESOLUTION_PAYOUT
+  ORDER_CANCEL_REFUND
+}
+
+enum MarketCategory {
+  STOCK
+  SPORTS
+}
+
+enum NotificationType {
+  ORDER_FILLED
+  MARKET_RESOLVED
+  PRICE_ALERT
+  TRADE_MATCH
+}
+
+enum AlertDirection {
+  ABOVE
+  BELOW
+}
+
+enum ChainSettlementStatus {
+  PENDING
+  SUBMITTED
+  CONFIRMED
+  FAILED
+  SKIPPED
+}
+
+enum ChainSettlementType {
+  TRADE_ATTESTATION
+  MARKET_RESOLVED
+  WALLET_LINK
+  MARKET_INITIALIZED
+  ONCHAIN_MARKET_SETTLED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  displayName   String?
+  balance       Decimal        @default(10000) @db.Decimal(14, 2)
+  isAdmin       Boolean        @default(false)
+  walletAddress String?        @unique
+  solanaLinkNonce String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  orders        Order[]
+  positions     Position[]
+  transactions  Transaction[]
+  buyTrades     Trade[]        @relation("BuyTrades")
+  sellTrades    Trade[]        @relation("SellTrades")
+  watchlist     Watchlist[]
+  notifications Notification[]
+  comments      MarketComment[]
+  priceAlerts   PriceAlert[]
+  chainSettlements ChainSettlement[]
+}
+
+model Market {
+  id             String           @id @default(cuid())
+  title          String
+  symbol         String
+  strike         Decimal          @db.Decimal(14, 2)
+  condition      PriceCondition
+  category       MarketCategory   @default(STOCK)
+  description    String?
+  resolveDate    DateTime         @db.Date
+  status         MarketStatus     @default(OPEN)
+  winningOutcome Outcome?
+  resolvedPrice  Decimal?         @db.Decimal(14, 4)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  orders         Order[]
+  positions      Position[]
+  trades         Trade[]
+  priceSnapshots PriceSnapshot[]
+  watchlist      Watchlist[]
+  comments       MarketComment[]
+  priceAlerts    PriceAlert[]
+  onChainMarket  OnChainMarket?
+  chainSettlements ChainSettlement[]
+
+  @@index([status])
+  @@index([symbol])
+  @@index([category])
+}
+
+model PriceSnapshot {
+  id           String   @id @default(cuid())
+  marketId     String
+  yesPriceCents Int
+  volume       Int      @default(0)
+  createdAt    DateTime @default(now())
+  market       Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@index([marketId, createdAt])
+}
+
+model Order {
+  id         String      @id @default(cuid())
+  userId     String
+  marketId   String
+  outcome    Outcome
+  side       OrderSide
+  priceCents Int
+  quantity   Int
+  filledQty  Int         @default(0)
+  status     OrderStatus @default(OPEN)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market     Market      @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  buyTrades  Trade[]     @relation("BuyOrder")
+  sellTrades Trade[]     @relation("SellOrder")
+
+  @@index([marketId, status, outcome, side])
+  @@index([userId])
+}
+
+model Trade {
+  id           String   @id @default(cuid())
+  marketId     String
+  buyOrderId   String
+  sellOrderId  String
+  buyerId      String
+  sellerId     String
+  outcome      Outcome
+  priceCents   Int
+  quantity     Int
+  createdAt    DateTime @default(now())
+  market       Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  buyOrder     Order    @relation("BuyOrder", fields: [buyOrderId], references: [id])
+  sellOrder    Order    @relation("SellOrder", fields: [sellOrderId], references: [id])
+  buyer        User     @relation("BuyTrades", fields: [buyerId], references: [id])
+  seller       User     @relation("SellTrades", fields: [sellerId], references: [id])
+  chainSettlements ChainSettlement[]
+}
+
+model Position {
+  id        String   @id @default(cuid())
+  userId    String
+  marketId  String
+  yesShares Int      @default(0)
+  noShares  Int      @default(0)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, marketId])
+}
+
+model Transaction {
+  id        String          @id @default(cuid())
+  userId    String
+  type      TransactionType
+  amount    Decimal         @db.Decimal(14, 2)
+  balanceAfter Decimal      @db.Decimal(14, 2)
+  marketId  String?
+  note      String?
+  createdAt DateTime        @default(now())
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Watchlist {
+  id        String   @id @default(cuid())
+  userId    String
+  marketId  String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, marketId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  read      Boolean          @default(false)
+  marketId  String?
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+}
+
+model MarketComment {
+  id        String   @id @default(cuid())
+  userId    String
+  marketId  String
+  body      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@index([marketId, createdAt])
+}
+
+model PriceAlert {
+  id          String         @id @default(cuid())
+  userId      String
+  marketId    String
+  targetCents Int
+  direction   AlertDirection
+  triggered   Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market      Market         @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([marketId, triggered])
+}
+
+model OnChainMarket {
+  id          String   @id @default(cuid())
+  marketId    String   @unique
+  pda         String
+  programId   String
+  cluster     String   @default("devnet")
+  txSignature String?
+  createdAt   DateTime @default(now())
+  market      Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+}
+
+model ChainSettlement {
+  id          String                @id @default(cuid())
+  userId      String?
+  marketId    String?
+  tradeId     String?
+  type        ChainSettlementType
+  status      ChainSettlementStatus @default(PENDING)
+  payload     Json
+  txSignature String?
+  slot        BigInt?
+  error       String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  user        User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  market      Market?               @relation(fields: [marketId], references: [id], onDelete: SetNull)
+  trade       Trade?                @relation(fields: [tradeId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([userId])
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@repo/solana",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./config": "./src/config.js"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.31.1",
+    "@solana/web3.js": "^1.98.2",
+    "bn.js": "^5.2.2",
+    "bs58": "^6.0.0",
+    "tweetnacl": "^1.0.3"
+  }
+}

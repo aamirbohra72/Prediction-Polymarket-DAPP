@@ -1,0 +1,27 @@
+{
+  "name": "prediction-polymarket",
+  "private": true,
+  "packageManager": "npm@10.8.2",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "db:generate": "node scripts/prisma-generate.mjs",
+    "db:push": "prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate",
+    "db:migrate": "prisma migrate dev --schema=packages/database/prisma/schema.prisma",
+    "db:seed": "node packages/database/prisma/seed.js",
+    "lint": "turbo lint",
+    "kafka:up": "docker compose up -d",
+    "kafka:down": "docker compose down"
+  },
+  "devDependencies": {
+    "prisma": "^6.9.0",
+    "turbo": "^2.5.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

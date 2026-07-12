@@ -1,0 +1,25 @@
+[features]
+seeds = false
+skip-lint = false
+
+[programs.devnet]
+stockpredict = "StockPr111111111111111111111111111111111"
+
+[programs.localnet]
+stockpredict = "StockPr111111111111111111111111111111111"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsmocha.json -t 1000000 tests/**/*.ts"
+
+[toolchain]
+anchor_version = "0.31.0"
+
+[workspace]
+members = ["programs/*"]

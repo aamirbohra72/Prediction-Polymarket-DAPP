@@ -1,0 +1,56 @@
+{
+  "address": "StockPr111111111111111111111111111111111",
+  "metadata": {
+    "name": "stockpredict",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "StockPredict on-chain prediction markets"
+  },
+  "instructions": [
+    {
+      "name": "initialize_market",
+      "discriminator": [35, 35, 189, 193, 155, 48, 170, 203],
+      "accounts": [
+        { "name": "authority", "writable": true, "signer": true },
+        { "name": "market", "writable": true },
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
+      ],
+      "args": [
+        { "name": "market_key", "type": { "array": ["u8", 32] } },
+        { "name": "strike_cents", "type": "u64" },
+        { "name": "resolve_ts", "type": "i64" }
+      ]
+    },
+    {
+      "name": "settle_market",
+      "discriminator": [193, 153, 95, 216, 166, 6, 144, 217],
+      "accounts": [
+        { "name": "authority", "signer": true },
+        { "name": "market", "writable": true }
+      ],
+      "args": [{ "name": "winning_outcome", "type": "u8" }]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Market",
+      "discriminator": [219, 190, 213, 55, 0, 227, 198, 154],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "authority", "type": "pubkey" },
+          { "name": "market_key", "type": { "array": ["u8", 32] } },
+          { "name": "strike_cents", "type": "u64" },
+          { "name": "resolve_ts", "type": "i64" },
+          { "name": "status", "type": "u8" },
+          { "name": "winning_outcome", "type": "u8" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    { "code": 6000, "name": "Unauthorized", "msg": "Unauthorized" },
+    { "code": 6001, "name": "MarketClosed", "msg": "Market is not open" }
+  ]
+}
