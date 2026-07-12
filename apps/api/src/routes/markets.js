@@ -8,15 +8,36 @@ import { getOrderBookSnapshot, getMarketExecutionPrice } from "../services/order
 import { getPriceHistory } from "../services/priceHistory.js";
 import { tryMatchOrder, mintSharesForBuy, releaseSharesForSell } from "../services/matching.js";
 import { emitOrderPlaced } from "../services/eventBus.js";
-import { invalidateLeaderboard } from "@repo/platform/cache";
+import { invalidateLeaderboard, invalidateMarketsList, CACHE_KEYS } from "@repo/platform/cache";
+import { cacheGet, cacheSet } from "@repo/platform/redis";
 import { isKafkaEnabled, isProducerReady } from "@repo/kafka";
 import { getMarketOpenInterest } from "../services/stats.js";
 import { fetchLiveQuote } from "../services/stockPrice.js";
 
 const router = Router();
 
+function marketsCacheKey(query) {
+  const { status, symbol, sort, category, watchlist } = query;
+  if (watchlist === "true" || symbol) return null; // user/filter-specific — skip shared cache
+  return [
+    status || "all",
+    category || "all",
+    sort || "default",
+  ].join(":");
+}
+
 router.get("/", optionalAuth, async (req, res) => {
   const { status, symbol, sort, category, watchlist } = req.query;
+  const cacheKeyPart = marketsCacheKey(req.query);
+  const redisKey = cacheKeyPart ? CACHE_KEYS.marketsList(cacheKeyPart) : null;
+
+  if (redisKey && !req.user) {
+    const cached = await cacheGet(redisKey);
+    if (cached?.markets) {
+      return res.json({ markets: cached.markets, meta: { cached: true, cachedAt: cached.cachedAt } });
+    }
+  }
+
   const where = {};
 
   if (status && ["OPEN", "CLOSED", "RESOLVED"].includes(status)) {
@@ -80,7 +101,15 @@ router.get("/", optionalAuth, async (req, res) => {
     );
   }
 
-  res.json({ markets: sorted });
+  if (redisKey && !req.user) {
+    await cacheSet(
+      redisKey,
+      { markets: sorted, cachedAt: Date.now() },
+      config.cacheLeaderboardTtl || 60
+    );
+  }
+
+  res.json({ markets: sorted, meta: { cached: false } });
 });
 
 router.get("/:id/history", async (req, res) => {
@@ -326,6 +355,7 @@ router.post("/:id/orders", requireAuth, async (req, res) => {
     });
     if (!isKafkaEnabled() || !isProducerReady()) {
       await invalidateLeaderboard();
+      await invalidateMarketsList();
     }
 
     res.status(201).json({

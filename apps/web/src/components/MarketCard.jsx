@@ -1,49 +1,74 @@
 import Link from "next/link";
-import Countdown from "./Countdown";
+import ChanceRing from "./ChanceRing";
 import WatchlistStar from "./WatchlistStar";
+
+const SYMBOL_EMOJI = {
+  AAPL: "🍎",
+  TSLA: "⚡",
+  NVDA: "🎮",
+  MSFT: "🪟",
+  AMZN: "📦",
+  GOOGL: "🔍",
+  META: "📘",
+  AMD: "💻",
+  NFLX: "🎬",
+  SPY: "📊",
+  BTC: "₿",
+  ETH: "Ξ",
+};
 
 export default function MarketCard({ market }) {
   const yesPrice = market.impliedYesPrice ?? 50;
-  const spread = market.spread;
 
   return (
-    <Link
-      href={`/markets/${market.id}`}
-      className="block rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 transition hover:border-[var(--accent)]"
-    >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="rounded bg-[var(--bg)] px-2 py-0.5 text-xs font-medium text-[var(--muted)]">
-          {market.symbol}
-        </span>
+    <article className="flex h-full flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 transition hover:border-[var(--accent)]/50 hover:bg-[var(--surface-2)]">
+      <div className="mb-3 flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--bg)] text-lg">
+          {SYMBOL_EMOJI[market.symbol] || "📈"}
+        </div>
+        <Link href={`/markets/${market.id}`} className="min-w-0 flex-1">
+          <h2 className="line-clamp-2 text-sm font-semibold leading-snug hover:text-[var(--accent)]">
+            {market.title}
+          </h2>
+          <p className="mt-1 text-[11px] text-[var(--muted)]">
+            {market.symbol} · {market.category || "STOCK"}
+          </p>
+        </Link>
+        <ChanceRing percent={yesPrice} size={64} />
+      </div>
+
+      <div className="mt-auto grid grid-cols-2 gap-2">
+        <Link
+          href={`/markets/${market.id}`}
+          className="rounded-lg bg-[var(--yes)]/20 py-2.5 text-center text-sm font-semibold text-[var(--yes)] hover:bg-[var(--yes)] hover:text-white"
+        >
+          Yes
+        </Link>
+        <Link
+          href={`/markets/${market.id}`}
+          className="rounded-lg bg-[var(--no)]/20 py-2.5 text-center text-sm font-semibold text-[var(--no)] hover:bg-[var(--no)] hover:text-white"
+        >
+          No
+        </Link>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between text-[11px] text-[var(--muted)]">
+        <span>${((market.volume ?? 0) * (yesPrice / 100)).toFixed(0)} Vol · {market.volume ?? 0} shares</span>
         <div className="flex items-center gap-2">
-          <WatchlistStar marketId={market.id} initial={market.watchlisted} />
-          {market.status === "OPEN" && <Countdown resolveDate={market.resolveDate} />}
           <span
-            className={`text-xs font-medium ${
+            className={
               market.status === "OPEN"
                 ? "text-[var(--yes)]"
                 : market.status === "RESOLVED"
-                  ? "text-[var(--muted)]"
+                  ? ""
                   : "text-amber-400"
-            }`}
+            }
           >
             {market.status}
           </span>
+          <WatchlistStar marketId={market.id} initial={market.watchlisted} />
         </div>
       </div>
-      <h2 className="mb-4 text-base font-medium leading-snug">{market.title}</h2>
-      <div className="mb-2 flex justify-between text-sm">
-        <span className="text-[var(--yes)]">YES {yesPrice}¢</span>
-        <span className="text-[var(--no)]">NO {100 - yesPrice}¢</span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-[var(--bg)]">
-        <div className="h-full bg-[var(--yes)]" style={{ width: `${yesPrice}%` }} />
-      </div>
-      <p className="mt-3 text-xs text-[var(--muted)]">
-        {market.status === "RESOLVED" && market.winningOutcome
-          ? `Resolved: ${market.winningOutcome} won`
-          : `Vol ${market.volume ?? 0} · OI ${market.openInterest ?? 0}${spread != null ? ` · Spread ${spread}¢` : ""}`}
-      </p>
-    </Link>
+    </article>
   );
 }

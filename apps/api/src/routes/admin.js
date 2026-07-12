@@ -15,6 +15,7 @@ import {
   autoInitAfterCreate,
 } from "../services/onChainMarket.js";
 import { getSolanaConfig, isProgramConfigured } from "@repo/solana";
+import { invalidateMarketsList } from "@repo/platform/cache";
 
 const router = Router();
 
@@ -73,6 +74,7 @@ router.post("/markets", requireAdmin, async (req, res) => {
       },
     });
 
+    await invalidateMarketsList();
     res.status(201).json({ market: formatMarket(market) });
 
     autoInitAfterCreate(market.id).catch((e) =>

@@ -1,6 +1,6 @@
 "use client";
 
-export default function PriceChart({ history = [] }) {
+export default function PriceChart({ history = [], stroke = "yes" }) {
   if (!history.length) {
     return (
       <p className="py-8 text-center text-sm text-[var(--muted)]">
@@ -25,28 +25,30 @@ export default function PriceChart({ history = [] }) {
 
   const line = coords.join(" ");
   const area = `${pad},${h - pad} ${line} ${w - pad},${h - pad}`;
+  const color = stroke === "accent" ? "rgb(59, 130, 246)" : "rgb(34, 197, 94)";
+  const gradId = stroke === "accent" ? "accentGrad" : "yesGrad";
 
   return (
     <div className="w-full overflow-hidden">
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto" preserveAspectRatio="none">
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-auto w-full" preserveAspectRatio="none">
         <defs>
-          <linearGradient id="yesGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgb(34, 197, 94)" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="rgb(34, 197, 94)" stopOpacity="0" />
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
           </linearGradient>
         </defs>
-        <polygon points={area} fill="url(#yesGrad)" />
+        <polygon points={area} fill={`url(#${gradId})`} />
         <polyline
           points={line}
           fill="none"
-          stroke="rgb(34, 197, 94)"
+          stroke={color}
           strokeWidth="2"
           vectorEffect="non-scaling-stroke"
         />
       </svg>
       <div className="mt-1 flex justify-between text-xs text-[var(--muted)]">
         <span>{min}¢</span>
-        <span className="text-[var(--yes)]">YES probability</span>
+        <span style={{ color }}>YES probability</span>
         <span>{max}¢</span>
       </div>
     </div>

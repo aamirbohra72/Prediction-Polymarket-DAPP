@@ -14,8 +14,8 @@ export default function RootLayout({ children }) {
       <body>
         <SolanaProvider>
           <Nav />
-          <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
-          <footer className="mx-auto max-w-6xl px-4 py-8 text-center text-xs text-[var(--muted)]">
+          <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8">{children}</main>
+          <footer className="mx-auto max-w-7xl border-t border-[var(--border)] px-4 py-8 text-center text-xs text-[var(--muted)]">
             Play money only. Not financial advice. Prices from third-party API.
           </footer>
         </SolanaProvider>

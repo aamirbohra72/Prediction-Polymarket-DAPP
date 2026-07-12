@@ -9,12 +9,14 @@
   --yes: #22c55e;
   --no: #ef4444;
   --accent: #3b82f6;
+  --surface-2: #1a2130;
 }
 
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 html.light {
@@ -23,4 +25,19 @@ html.light {
   --border: #d8dee6;
   --text: #0f172a;
   --muted: #64748b;
+  --surface-2: #eef2f7;
+}
+
+/* Polymarket-style wallet button blend */
+.wallet-adapter-button {
+  height: 2rem !important;
+  border-radius: 0.5rem !important;
+  font-size: 0.75rem !important;
+}
+
+.category-rail {
+  scrollbar-width: none;
+}
+.category-rail::-webkit-scrollbar {
+  display: none;
 }

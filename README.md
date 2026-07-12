@@ -121,8 +121,10 @@ Send JWT as `Authorization: Bearer <token>`.
 
 Hybrid on-chain settlement on devnet. Full roadmap: [docs/SOLANA-ROADMAP.md](docs/SOLANA-ROADMAP.md).
 
+**Homepage markets come from Neon + Redis, not Solana.** See [docs/DATA-SOURCES.md](docs/DATA-SOURCES.md).
+
 ```env
-SOLANA_ENABLED=true
+SOLANA_ENABLED=false
 SOLANA_CLUSTER=devnet
 NEXT_PUBLIC_SOLANA_CLUSTER=devnet
 ```
