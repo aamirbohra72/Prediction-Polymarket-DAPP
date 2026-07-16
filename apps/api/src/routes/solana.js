@@ -17,6 +17,11 @@ import {
 } from "../services/chainSettlement.js";
 import { listOnChainMarkets, getMarketOnChainStatus } from "../services/onChainMarket.js";
 import { isProgramConfigured } from "@repo/solana";
+import {
+  getCollateralOverview,
+  confirmDeposit,
+  processWithdrawal,
+} from "../services/collateral.js";
 
 const router = Router();
 
@@ -32,6 +37,8 @@ router.get("/config", (_req, res) => {
     autoInitMarkets: cfg.autoInitMarkets,
     programConfigured: isProgramConfigured(),
     explorerCluster: cfg.explorerCluster,
+    usdcMint: cfg.usdcMint || null,
+    collateralConfigured: Boolean(cfg.enabled && cfg.usdcMint && cfg.settlementSecret),
   });
 });
 
@@ -139,6 +146,45 @@ router.post("/process-settlements", requireAuth, async (req, res) => {
   }
   const result = await processPendingSettlements(20);
   res.json(result);
+});
+
+// --- Collateral vault (Phase 3: USDC deposit / withdraw) ---
+
+router.get("/vault", requireAuth, async (req, res) => {
+  try {
+    const overview = await getCollateralOverview(req.user.id);
+    res.json(overview);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/deposit", requireAuth, async (req, res) => {
+  try {
+    const fresh = await prisma.user.findUnique({ where: { id: req.user.id } });
+    const result = await confirmDeposit({
+      userId: req.user.id,
+      walletAddress: fresh.walletAddress,
+      signature: req.body.signature,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post("/withdraw", requireAuth, async (req, res) => {
+  try {
+    const fresh = await prisma.user.findUnique({ where: { id: req.user.id } });
+    const result = await processWithdrawal({
+      userId: req.user.id,
+      walletAddress: fresh.walletAddress,
+      amount: req.body.amount,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 router.get("/markets", async (_req, res) => {

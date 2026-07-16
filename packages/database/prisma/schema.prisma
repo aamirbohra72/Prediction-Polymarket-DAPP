@@ -42,6 +42,8 @@ enum TransactionType {
   TRADE_SELL
   RESOLUTION_PAYOUT
   ORDER_CANCEL_REFUND
+  WALLET_DEPOSIT
+  WALLET_WITHDRAWAL
 }
 
 enum MarketCategory {
@@ -98,6 +100,28 @@ model User {
   comments      MarketComment[]
   priceAlerts   PriceAlert[]
   chainSettlements ChainSettlement[]
+  walletDeposits WalletDeposit[]
+}
+
+enum CollateralDirection {
+  DEPOSIT
+  WITHDRAWAL
+}
+
+model WalletDeposit {
+  id            String              @id @default(cuid())
+  userId        String
+  direction     CollateralDirection
+  amount        Decimal             @db.Decimal(18, 6)
+  walletAddress String
+  mint          String
+  txSignature   String              @unique
+  slot          BigInt?
+  status        String              @default("CONFIRMED")
+  createdAt     DateTime            @default(now())
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 model Market {

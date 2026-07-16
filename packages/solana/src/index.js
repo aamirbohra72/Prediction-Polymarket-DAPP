@@ -1,4 +1,4 @@
-export { getSolanaConfig } from "./config.js";
+export { getSolanaConfig, isCollateralConfigured } from "./config.js";
 export { getConnection, getSolanaHealth } from "./connection.js";
 export {
   createLinkMessage,
@@ -40,4 +40,26 @@ export async function initializeMarketOnChain(...args) {
 export async function settleMarketOnChain(...args) {
   const m = await import("./program.js");
   return m.settleMarketOnChain(...args);
+}
+
+// Lazy re-exports for USDC vault (needs @solana/spl-token)
+export async function getVaultInfo(...args) {
+  const m = await import("./vault.js");
+  return m.getVaultInfo(...args);
+}
+export async function verifyDepositTx(...args) {
+  const m = await import("./vault.js");
+  return m.verifyDepositTx(...args);
+}
+export async function sendWithdrawal(...args) {
+  const m = await import("./vault.js");
+  return m.sendWithdrawal(...args);
+}
+export async function toBaseUnits(...args) {
+  const m = await import("./vault.js");
+  return m.toBaseUnits(...args);
+}
+export async function fromBaseUnits(...args) {
+  const m = await import("./vault.js");
+  return m.fromBaseUnits(...args);
 }

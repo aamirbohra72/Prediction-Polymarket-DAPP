@@ -30,5 +30,13 @@ export function getSolanaConfig() {
     settlementSecret: process.env.SOLANA_SETTLEMENT_SECRET || "",
     commitment: process.env.SOLANA_COMMITMENT || "confirmed",
     explorerCluster: cluster === "mainnet" ? "" : `?cluster=${cluster}`,
+    usdcMint: process.env.SOLANA_USDC_MINT || "",
+    usdcDecimals: Number(process.env.SOLANA_USDC_DECIMALS || 6),
   };
+}
+
+// Collateral (USDC vault) is usable only when the token mint + operator key exist.
+export function isCollateralConfigured() {
+  const cfg = getSolanaConfig();
+  return Boolean(cfg.enabled && cfg.usdcMint && cfg.settlementSecret);
 }

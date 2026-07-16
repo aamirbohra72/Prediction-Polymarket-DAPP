@@ -22,7 +22,16 @@ export default function SolanaProvider({ children }) {
 
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={[]} autoConnect>
+      <WalletProvider
+        wallets={[]}
+        autoConnect
+        onError={(error) => {
+          // User cancel / reject is expected UX — don't spam the Next.js overlay.
+          const msg = String(error?.message || "");
+          if (/user rejected|rejected the request|cancelled|canceled/i.test(msg)) return;
+          console.warn("[wallet]", error);
+        }}
+      >
         <WalletModalProvider>{children}</WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>

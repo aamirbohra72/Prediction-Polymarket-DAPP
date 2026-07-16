@@ -6,6 +6,7 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import bs58 from "bs58";
 import { api } from "@/lib/api";
 import WalletConnectButton from "@/components/WalletConnectButton";
+import CollateralPanel from "@/components/CollateralPanel";
 
 export default function Web3Page() {
   const { connection } = useConnection();
@@ -195,6 +196,14 @@ export default function Web3Page() {
               {linking ? "Signing…" : "Sign & link wallet"}
             </button>
           )}
+        </div>
+      )}
+
+      {user && connected && (
+        <div className="mb-8">
+          <CollateralPanel
+            walletLinked={user.walletAddress === publicKey?.toBase58()}
+          />
         </div>
       )}
 

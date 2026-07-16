@@ -103,6 +103,11 @@ export const api = {
     request("/solana/link-wallet", { method: "POST", body: JSON.stringify(body) }),
   solanaUnlinkWallet: () => request("/solana/link-wallet", { method: "DELETE" }),
   solanaSettlements: () => request("/solana/settlements"),
+  solanaVault: () => request("/solana/vault"),
+  solanaDeposit: (signature) =>
+    request("/solana/deposit", { method: "POST", body: JSON.stringify({ signature }) }),
+  solanaWithdraw: (amount) =>
+    request("/solana/withdraw", { method: "POST", body: JSON.stringify({ amount }) }),
   solanaMarkets: () => request("/solana/markets"),
   solanaMarketStatus: (marketId) => request(`/solana/markets/${marketId}`),
   adminOnChain: () => request("/admin/on-chain"),

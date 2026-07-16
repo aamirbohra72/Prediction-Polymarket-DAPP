@@ -131,15 +131,31 @@ npm run db:push
 
 ---
 
-### Phase 3 — Collateral (USDC devnet)
+### Phase 3 — Collateral (USDC devnet) ✅ (implemented, operator-custody)
 
-**Goal:** Replace play-money deposits with SPL USDC in vault.
+**Goal:** Back play-money balance with real on-chain USDC via a vault.
+
+Setup guide: [WEB3-SETUP-WINDOWS.md](WEB3-SETUP-WINDOWS.md).
+
+| Task | Status |
+|------|--------|
+| Devnet USDC mint + ATAs (`@solana/spl-token`) | ✅ |
+| Vault = operator ATA (`SOLANA_USDC_MINT`, `SOLANA_SETTLEMENT_SECRET`) | ✅ |
+| Deposit: user signs SPL transfer → API verifies tx → credits balance | ✅ `POST /solana/deposit` |
+| Withdraw: API sends USDC vault → wallet, debits balance | ✅ `POST /solana/withdraw` |
+| Vault info + history | ✅ `GET /solana/vault`, `WalletDeposit` model |
+| Idempotent by `txSignature` | ✅ |
+
+**Custody model:** operator-owned vault (hybrid CEX, like Backpack/CoinDCX).
+Real USDC moves on-chain; the operator key custodies the pooled vault.
+
+### Phase 3.5 — Non-custodial PDA escrow (Polymarket style)
 
 | Task | Reference |
 |------|-----------|
-| USDC mint (devnet) | [SPL Token docs](https://spl.solana.com/token) |
-| Associated token accounts | `getAssociatedTokenAddress` |
-| Escrow on order | Lock USDC until match or cancel |
+| Vault owned by `["vault"]` PDA (`anchor-spl`) | Program CPI transfers |
+| `deposit_collateral` / `withdraw_collateral` instructions | Withdraw signed by PDA seeds |
+| Per-order escrow (lock until match/cancel) | Conditional-token model |
 
 ---
 
