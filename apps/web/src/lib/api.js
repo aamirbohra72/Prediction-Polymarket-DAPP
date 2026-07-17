@@ -49,10 +49,12 @@ export const api = {
     if (params.symbol) q.set("symbol", params.symbol);
     if (params.sort) q.set("sort", params.sort);
     if (params.category) q.set("category", params.category);
+    if (params.timeframe) q.set("timeframe", params.timeframe);
     if (params.watchlist) q.set("watchlist", "true");
     const qs = q.toString();
     return request(`/markets${qs ? `?${qs}` : ""}`);
   },
+  marketFacets: () => request("/markets/facets"),
   leaderboard: () => request("/leaderboard"),
   activity: (limit = 40, type = "all") =>
     request(`/activity?limit=${limit}&type=${encodeURIComponent(type)}`),

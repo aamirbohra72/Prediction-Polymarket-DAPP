@@ -1,5 +1,12 @@
 import { optionalAuth } from "../middleware/optionalAuth.js";
-import { formatMarket, maskEmail } from "../utils/helpers.js";
+import {
+  formatMarket,
+  maskEmail,
+  MARKET_CATEGORIES,
+  isValidMarketCategory,
+  isValidTimeframe,
+  timeframeDateFilter,
+} from "../utils/helpers.js";
 import {
   getOrderBookSnapshot,
   getMarketExecutionPrice,
@@ -23,17 +30,18 @@ import { config } from "../config.js";
 const router = Router();
 
 function marketsCacheKey(query) {
-  const { status, symbol, sort, category, watchlist } = query;
+  const { status, symbol, sort, category, timeframe, watchlist } = query;
   if (watchlist === "true" || symbol) return null; // user/filter-specific — skip shared cache
   return [
     status || "all",
     category || "all",
+    timeframe || "all",
     sort || "default",
   ].join(":");
 }
 
 router.get("/", optionalAuth, async (req, res) => {
-  const { status, symbol, sort, category, watchlist } = req.query;
+  const { status, symbol, sort, category, timeframe, watchlist } = req.query;
   const cacheKeyPart = marketsCacheKey(req.query);
   const redisKey = cacheKeyPart ? CACHE_KEYS.marketsList(cacheKeyPart) : null;
 
@@ -45,8 +53,12 @@ router.get("/", optionalAuth, async (req, res) => {
   if (symbol) {
     where.symbol = { contains: String(symbol).toUpperCase(), mode: "insensitive" };
   }
-  if (category && ["STOCK", "SPORTS"].includes(category)) {
+  if (category && isValidMarketCategory(category)) {
     where.category = category;
+  }
+  if (timeframe && isValidTimeframe(String(timeframe).toLowerCase())) {
+    const range = timeframeDateFilter(String(timeframe).toLowerCase());
+    if (range) where.resolveDate = range;
   }
 
   let marketIds = null;
@@ -130,6 +142,67 @@ router.get("/", optionalAuth, async (req, res) => {
   res.json({
     markets: marketsOut,
     meta: { cached: cachedAt != null && baseMarkets != null, cachedAt },
+  });
+});
+
+/** Category counts + symbols-per-category for sidebar / pill filters. */
+router.get("/facets", async (_req, res) => {
+  const openWhere = { status: { in: ["OPEN", "CLOSED"] } };
+
+  const [byCategory, bySymbol, dailyCount, weeklyCount, monthlyCount] =
+    await Promise.all([
+      prisma.market.groupBy({
+        by: ["category"],
+        _count: { _all: true },
+        where: openWhere,
+      }),
+      prisma.market.groupBy({
+        by: ["category", "symbol"],
+        _count: { _all: true },
+        where: openWhere,
+      }),
+      prisma.market.count({
+        where: { ...openWhere, resolveDate: timeframeDateFilter("daily") },
+      }),
+      prisma.market.count({
+        where: { ...openWhere, resolveDate: timeframeDateFilter("weekly") },
+      }),
+      prisma.market.count({
+        where: { ...openWhere, resolveDate: timeframeDateFilter("monthly") },
+      }),
+    ]);
+
+  const total = byCategory.reduce((sum, row) => sum + row._count._all, 0);
+  const categories = {};
+  for (const id of MARKET_CATEGORIES) {
+    categories[id] = 0;
+  }
+  for (const row of byCategory) {
+    categories[row.category] = row._count._all;
+  }
+
+  const symbolsByCategory = {};
+  for (const id of MARKET_CATEGORIES) {
+    symbolsByCategory[id] = [];
+  }
+  const sortedSymbols = [...bySymbol].sort(
+    (a, b) => b._count._all - a._count._all || a.symbol.localeCompare(b.symbol)
+  );
+  for (const row of sortedSymbols) {
+    const list = symbolsByCategory[row.category];
+    if (!list || list.length >= 12) continue;
+    list.push({ symbol: row.symbol, count: row._count._all });
+  }
+
+  res.json({
+    total,
+    categories,
+    symbolsByCategory,
+    timeframes: {
+      daily: dailyCount,
+      weekly: weeklyCount,
+      monthly: monthlyCount,
+    },
   });
 });
 

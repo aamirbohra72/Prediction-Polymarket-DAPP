@@ -1,5 +1,44 @@
 import { Prisma } from "@repo/database";
 
+/** Flat market categories (Polymarket-style Finance + Sports). */
+export const MARKET_CATEGORIES = [
+  "STOCK",
+  "COMMODITIES",
+  "INDICES",
+  "CRYPTO",
+  "FOREX",
+  "SPORTS",
+];
+
+export const MARKET_TIMEFRAMES = ["daily", "weekly", "monthly"];
+
+export function isValidMarketCategory(value) {
+  return MARKET_CATEGORIES.includes(value);
+}
+
+export function isValidTimeframe(value) {
+  return MARKET_TIMEFRAMES.includes(value);
+}
+
+/** Resolve-date window for Daily / Weekly / Monthly filters (from start of today UTC). */
+export function timeframeDateFilter(timeframe) {
+  if (!isValidTimeframe(timeframe)) return null;
+
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  if (timeframe === "daily") {
+    end.setUTCDate(end.getUTCDate() + 2);
+  } else if (timeframe === "weekly") {
+    end.setUTCDate(end.getUTCDate() + 7);
+  } else {
+    end.setUTCDate(end.getUTCDate() + 31);
+  }
+
+  return { gte: start, lt: end };
+}
+
 export function toNumber(value) {
   if (value == null) return 0;
   if (value instanceof Prisma.Decimal) return value.toNumber();

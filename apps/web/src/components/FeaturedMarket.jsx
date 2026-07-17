@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { categoryLabel } from "@/lib/categories";
 import PriceChart from "./PriceChart";
 import ChanceRing from "./ChanceRing";
 import WatchlistStar from "./WatchlistStar";
@@ -28,7 +29,7 @@ export default function FeaturedMarket({ market }) {
     <article className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--muted)]">
         <span>
-          {market.category || "STOCK"} › {market.symbol}
+          {categoryLabel(market.category)} › {market.symbol}
         </span>
         <WatchlistStar marketId={market.id} initial={market.watchlisted} />
       </div>

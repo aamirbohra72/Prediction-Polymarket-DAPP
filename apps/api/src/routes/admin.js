@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma, Prisma } from "@repo/database";
 import { requireAdmin } from "../middleware/auth.js";
-import { formatMarket, marketTitle } from "../utils/helpers.js";
+import { formatMarket, marketTitle, isValidMarketCategory } from "../utils/helpers.js";
 import { resolveMarket } from "../services/resolution.js";
 import { runScheduledTasks } from "../services/scheduler.js";
 import { getPlatformStats } from "../services/stats.js";
@@ -69,7 +69,7 @@ router.post("/markets", requireAdmin, async (req, res) => {
         title:
           title ||
           marketTitle(symbol.toUpperCase(), strike, condition, date),
-        category: category === "SPORTS" ? "SPORTS" : "STOCK",
+        category: isValidMarketCategory(category) ? category : "STOCK",
         description: description ? String(description).slice(0, 500) : null,
       },
     });

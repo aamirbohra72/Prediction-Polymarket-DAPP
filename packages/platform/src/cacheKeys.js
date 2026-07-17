@@ -17,7 +17,33 @@ export async function invalidateUserCache(userId) {
 }
 
 export async function invalidateMarketsList() {
-  await cacheDel(
+  const statuses = ["all", "OPEN", "CLOSED", "RESOLVED"];
+  const categories = [
+    "all",
+    "STOCK",
+    "COMMODITIES",
+    "INDICES",
+    "CRYPTO",
+    "FOREX",
+    "SPORTS",
+  ];
+  const timeframes = ["all", "daily", "weekly", "monthly"];
+  const sorts = ["default", "volume", "yesPrice", "resolveDate"];
+  const keys = [];
+  for (const status of statuses) {
+    for (const category of categories) {
+      for (const timeframe of timeframes) {
+        for (const sort of sorts) {
+          keys.push(
+            CACHE_KEYS.marketsList(`${status}:${category}:${timeframe}:${sort}`)
+          );
+          // Older 3-segment keys
+          keys.push(CACHE_KEYS.marketsList(`${status}:${category}:${sort}`));
+        }
+      }
+    }
+  }
+  keys.push(
     CACHE_KEYS.marketsList("default"),
     CACHE_KEYS.marketsList("OPEN"),
     CACHE_KEYS.marketsList("CLOSED"),
@@ -28,6 +54,7 @@ export async function invalidateMarketsList() {
     CACHE_KEYS.marketsList("yesPrice"),
     CACHE_KEYS.marketsList("resolveDate")
   );
+  await cacheDel(...keys);
 }
 
 export async function invalidateAfterTrade(buyerId, sellerId) {

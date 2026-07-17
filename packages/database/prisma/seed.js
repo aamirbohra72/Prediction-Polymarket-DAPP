@@ -417,27 +417,57 @@ async function main() {
   }
 
   const demoMarkets = [
-    { symbol: "AAPL", strike: 200, condition: "CLOSE_ABOVE", days: 14, start: 55 },
-    { symbol: "AAPL", strike: 220, condition: "CLOSE_ABOVE", days: 45, start: 32 },
-    { symbol: "TSLA", strike: 250, condition: "CLOSE_BELOW", days: 21, start: 48 },
-    { symbol: "TSLA", strike: 300, condition: "CLOSE_ABOVE", days: 60, start: 28 },
-    { symbol: "NVDA", strike: 130, condition: "CLOSE_ABOVE", days: 30, start: 62 },
-    { symbol: "NVDA", strike: 150, condition: "CLOSE_ABOVE", days: 50, start: 41 },
-    { symbol: "MSFT", strike: 420, condition: "CLOSE_ABOVE", days: 20, start: 52 },
-    { symbol: "AMZN", strike: 200, condition: "CLOSE_ABOVE", days: 25, start: 57 },
-    { symbol: "GOOGL", strike: 180, condition: "CLOSE_ABOVE", days: 35, start: 49 },
-    { symbol: "META", strike: 550, condition: "CLOSE_ABOVE", days: 28, start: 44 },
-    { symbol: "AMD", strike: 160, condition: "CLOSE_BELOW", days: 18, start: 38 },
-    { symbol: "NFLX", strike: 900, condition: "CLOSE_ABOVE", days: 40, start: 33 },
-    { symbol: "SPY", strike: 550, condition: "CLOSE_ABOVE", days: 15, start: 61 },
-    { symbol: "SPY", strike: 500, condition: "CLOSE_BELOW", days: 45, start: 22 },
+    // Daily (1–2 days)
+    { symbol: "AAPL", strike: 205, condition: "CLOSE_ABOVE", days: 1, start: 58, category: "STOCK" },
+    { symbol: "AAPL", strike: 210, condition: "CLOSE_ABOVE", days: 2, start: 42, category: "STOCK" },
+    { symbol: "NVDA", strike: 125, condition: "CLOSE_ABOVE", days: 1, start: 61, category: "STOCK" },
+    { symbol: "GOLD", strike: 2350, condition: "CLOSE_ABOVE", days: 2, start: 55, category: "COMMODITIES" },
+    { symbol: "BTC", strike: 90000, condition: "CLOSE_ABOVE", days: 1, start: 52, category: "CRYPTO" },
+    // Weekly (3–7 days)
+    { symbol: "TSLA", strike: 260, condition: "CLOSE_ABOVE", days: 5, start: 47, category: "STOCK" },
+    { symbol: "TSLA", strike: 280, condition: "CLOSE_ABOVE", days: 6, start: 35, category: "STOCK" },
+    { symbol: "WTI", strike: 70, condition: "CLOSE_ABOVE", days: 4, start: 54, category: "COMMODITIES" },
+    { symbol: "WTI", strike: 80, condition: "CLOSE_ABOVE", days: 7, start: 38, category: "COMMODITIES" },
+    { symbol: "SPY", strike: 540, condition: "CLOSE_ABOVE", days: 5, start: 57, category: "INDICES" },
+    { symbol: "ETH", strike: 3200, condition: "CLOSE_ABOVE", days: 6, start: 46, category: "CRYPTO" },
+    // Monthly (8–45 days) — multi-strike same month for event cards
+    { symbol: "AAPL", strike: 200, condition: "CLOSE_ABOVE", days: 14, start: 55, category: "STOCK" },
+    { symbol: "AAPL", strike: 220, condition: "CLOSE_ABOVE", days: 18, start: 32, category: "STOCK" },
+    { symbol: "TSLA", strike: 250, condition: "CLOSE_BELOW", days: 21, start: 48, category: "STOCK" },
+    { symbol: "TSLA", strike: 300, condition: "CLOSE_ABOVE", days: 25, start: 28, category: "STOCK" },
+    { symbol: "NVDA", strike: 130, condition: "CLOSE_ABOVE", days: 30, start: 62, category: "STOCK" },
+    { symbol: "NVDA", strike: 150, condition: "CLOSE_ABOVE", days: 32, start: 41, category: "STOCK" },
+    { symbol: "MSFT", strike: 420, condition: "CLOSE_ABOVE", days: 20, start: 52, category: "STOCK" },
+    { symbol: "AMZN", strike: 200, condition: "CLOSE_ABOVE", days: 25, start: 57, category: "STOCK" },
+    { symbol: "GOOGL", strike: 180, condition: "CLOSE_ABOVE", days: 28, start: 49, category: "STOCK" },
+    { symbol: "META", strike: 550, condition: "CLOSE_ABOVE", days: 28, start: 44, category: "STOCK" },
+    { symbol: "AMD", strike: 160, condition: "CLOSE_BELOW", days: 18, start: 38, category: "STOCK" },
+    { symbol: "NFLX", strike: 900, condition: "CLOSE_ABOVE", days: 35, start: 33, category: "STOCK" },
+    { symbol: "SPY", strike: 550, condition: "CLOSE_ABOVE", days: 15, start: 61, category: "INDICES" },
+    { symbol: "SPY", strike: 500, condition: "CLOSE_BELOW", days: 20, start: 22, category: "INDICES" },
+    { symbol: "QQQ", strike: 480, condition: "CLOSE_ABOVE", days: 28, start: 54, category: "INDICES" },
+    { symbol: "GOLD", strike: 2400, condition: "CLOSE_ABOVE", days: 30, start: 58, category: "COMMODITIES" },
+    { symbol: "GOLD", strike: 2500, condition: "CLOSE_ABOVE", days: 32, start: 36, category: "COMMODITIES" },
+    { symbol: "SILVER", strike: 30, condition: "CLOSE_ABOVE", days: 25, start: 47, category: "COMMODITIES" },
+    { symbol: "SILVER", strike: 32, condition: "CLOSE_ABOVE", days: 27, start: 39, category: "COMMODITIES" },
+    { symbol: "WTI", strike: 75, condition: "CLOSE_ABOVE", days: 21, start: 52, category: "COMMODITIES" },
+    { symbol: "WTI", strike: 85, condition: "CLOSE_ABOVE", days: 24, start: 34, category: "COMMODITIES" },
+    { symbol: "URANIUM", strike: 90, condition: "CLOSE_ABOVE", days: 35, start: 41, category: "COMMODITIES" },
+    { symbol: "BTC", strike: 95000, condition: "CLOSE_ABOVE", days: 20, start: 56, category: "CRYPTO" },
+    { symbol: "BTC", strike: 100000, condition: "CLOSE_ABOVE", days: 22, start: 40, category: "CRYPTO" },
+    { symbol: "ETH", strike: 3500, condition: "CLOSE_ABOVE", days: 25, start: 49, category: "CRYPTO" },
+    { symbol: "EURUSD", strike: 1.1, condition: "CLOSE_ABOVE", days: 18, start: 45, category: "FOREX" },
+    { symbol: "NBA", strike: 1, condition: "CLOSE_ABOVE", days: 12, start: 53, category: "SPORTS" },
+    { symbol: "NFL", strike: 1, condition: "CLOSE_ABOVE", days: 22, start: 48, category: "SPORTS" },
   ];
 
   // Drop leftover past-due OPEN/CLOSED markets (they spam Finnhub resolve on startup)
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
   const stale = await prisma.market.deleteMany({
     where: {
       status: { in: ["OPEN", "CLOSED"] },
-      resolveDate: { lt: new Date() },
+      resolveDate: { lt: startOfToday },
       symbol: { not: "DEMO" },
     },
   });
@@ -482,15 +512,21 @@ async function main() {
           condition: m.condition,
           resolveDate,
           status: "OPEN",
-          category: "STOCK",
+          category: m.category || "STOCK",
           description: `Play-money prediction on ${m.symbol} daily close vs $${m.strike}.`,
         },
       });
       console.log("Created", market.symbol, market.title);
-    } else if (market.status !== "OPEN" && new Date(market.resolveDate) > new Date()) {
+    } else {
       market = await prisma.market.update({
         where: { id: market.id },
-        data: { status: "OPEN", resolveDate },
+        data: {
+          title,
+          condition: m.condition,
+          resolveDate,
+          status: "OPEN",
+          category: m.category || market.category || "STOCK",
+        },
       });
     }
 

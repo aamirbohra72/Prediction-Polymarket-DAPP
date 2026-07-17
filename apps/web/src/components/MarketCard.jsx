@@ -1,21 +1,8 @@
 import Link from "next/link";
 import ChanceRing from "./ChanceRing";
 import WatchlistStar from "./WatchlistStar";
-
-const SYMBOL_EMOJI = {
-  AAPL: "🍎",
-  TSLA: "⚡",
-  NVDA: "🎮",
-  MSFT: "🪟",
-  AMZN: "📦",
-  GOOGL: "🔍",
-  META: "📘",
-  AMD: "💻",
-  NFLX: "🎬",
-  SPY: "📊",
-  BTC: "₿",
-  ETH: "Ξ",
-};
+import { categoryLabel } from "@/lib/categories";
+import { symbolEmoji } from "@/lib/marketEvents";
 
 export default function MarketCard({ market }) {
   const yesPrice = market.impliedYesPrice ?? 50;
@@ -24,14 +11,14 @@ export default function MarketCard({ market }) {
     <article className="flex h-full flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 transition hover:border-[var(--accent)]/50 hover:bg-[var(--surface-2)]">
       <div className="mb-3 flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--bg)] text-lg">
-          {SYMBOL_EMOJI[market.symbol] || "📈"}
+          {symbolEmoji(market.symbol)}
         </div>
         <Link href={`/markets/${market.id}`} className="min-w-0 flex-1">
           <h2 className="line-clamp-2 text-sm font-semibold leading-snug hover:text-[var(--accent)]">
             {market.title}
           </h2>
           <p className="mt-1 text-[11px] text-[var(--muted)]">
-            {market.symbol} · {market.category || "STOCK"}
+            {market.symbol} · {categoryLabel(market.category)}
           </p>
         </Link>
         <ChanceRing percent={yesPrice} size={64} />
