@@ -21,4 +21,10 @@ export const config = {
   cachePortfolioTtl: Number(process.env.CACHE_PORTFOLIO_TTL) || 30,
   redisLogErrors: process.env.REDIS_LOG_ERRORS !== "false",
   solanaEnabled: process.env.SOLANA_ENABLED === "true",
+  /** Opt-in Polymarket US public catalog sync (does not replace seed markets). */
+  polymarketSyncEnabled: process.env.POLYMARKET_SYNC_ENABLED === "true",
+  polymarketSyncOnStart: process.env.POLYMARKET_SYNC_ON_START === "true",
+  polymarketSyncLimit: Number(process.env.POLYMARKET_SYNC_LIMIT) || 40,
+  polymarketKeyId: process.env.POLYMARKET_KEY_ID || "",
+  polymarketSecretKey: process.env.POLYMARKET_SECRET_KEY || "",
 };

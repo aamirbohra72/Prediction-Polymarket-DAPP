@@ -103,6 +103,9 @@ export const api = {
   deleteAlert: (id) => request(`/me/alerts/${id}`, { method: "DELETE" }),
   createMarket: (body) =>
     request("/admin/markets", { method: "POST", body: JSON.stringify(body) }),
+  syncPolymarket: (body = {}) =>
+    request("/admin/polymarket/sync", { method: "POST", body: JSON.stringify(body) }),
+  polymarketStatus: () => request("/admin/polymarket/status"),
   adminStats: () => request("/admin/stats"),
   resolveMarket: (id) => request(`/admin/markets/${id}/resolve`, { method: "POST" }),
   closeMarket: (id) =>

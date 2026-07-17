@@ -99,11 +99,19 @@ router.get("/", optionalAuth, async (req, res) => {
       getOpenInterestForMarkets(ids),
     ]);
 
-    baseMarkets = markets.map((m) => ({
-      ...formatMarket(m),
-      ...(summaries.get(m.id) ?? { impliedYesPrice: 50, spread: null, volume: 0 }),
-      openInterest: oiMap.get(m.id) ?? 0,
-    }));
+    baseMarkets = markets.map((m) => {
+      const book = summaries.get(m.id) ?? { impliedYesPrice: 50, spread: null, volume: 0 };
+      const implied =
+        book.volume > 0 || book.spread != null
+          ? book.impliedYesPrice
+          : m.externalYesCents ?? book.impliedYesPrice ?? 50;
+      return {
+        ...formatMarket(m),
+        ...book,
+        impliedYesPrice: implied,
+        openInterest: oiMap.get(m.id) ?? 0,
+      };
+    });
 
     if (sort === "volume") {
       baseMarkets.sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0));
@@ -391,7 +399,10 @@ router.get("/:id", optionalAuth, async (req, res) => {
   const book = await getOrderBookSnapshot(market.id);
   const history = await getPriceHistory(market.id);
   const openInterest = await getMarketOpenInterest(market.id);
-  const quote = market.status === "OPEN" ? await fetchLiveQuote(market.symbol) : null;
+  const quote =
+    market.status === "OPEN" && !market.externalSource
+      ? await fetchLiveQuote(market.symbol)
+      : null;
 
   const relatedMarkets = await prisma.market.findMany({
     where: { symbol: market.symbol, id: { not: market.id } },
@@ -412,10 +423,17 @@ router.get("/:id", optionalAuth, async (req, res) => {
     });
   }
 
+  const formatted = formatMarket(market);
+  const impliedYesPrice =
+    book.volume > 0
+      ? book.impliedYesPrice
+      : market.externalYesCents ?? book.impliedYesPrice ?? 50;
+
   res.json({
     market: {
-      ...formatMarket(market),
+      ...formatted,
       ...book,
+      impliedYesPrice,
       priceHistory: history,
       openInterest,
       liveQuote: quote,

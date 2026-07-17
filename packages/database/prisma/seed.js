@@ -490,7 +490,7 @@ async function main() {
     const title = marketTitle(m.symbol, m.strike, m.condition, resolveDate);
 
     let market = await prisma.market.findFirst({
-      where: { symbol: m.symbol, strike: m.strike, title },
+      where: { symbol: m.symbol, strike: m.strike, title, externalId: null },
     });
 
     if (!market) {
@@ -499,6 +499,7 @@ async function main() {
           symbol: m.symbol,
           strike: new Prisma.Decimal(m.strike),
           status: { in: ["OPEN", "CLOSED"] },
+          externalId: null,
         },
       });
     }

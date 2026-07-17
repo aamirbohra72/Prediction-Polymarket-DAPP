@@ -73,4 +73,11 @@ app.listen(config.port, async () => {
   await connectRedis();
   await connectProducer();
   startScheduler();
+
+  if (config.polymarketSyncOnStart) {
+    import("./services/polymarketSync.js")
+      .then(({ syncPolymarketMarkets }) => syncPolymarketMarkets())
+      .then((r) => console.log("[polymarket] startup sync:", r))
+      .catch((e) => console.warn("[polymarket] startup sync failed:", e.message));
+  }
 });

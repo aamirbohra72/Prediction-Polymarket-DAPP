@@ -32,6 +32,8 @@ export async function resolveDueMarkets() {
     where: {
       status: "CLOSED",
       resolveDate: { lt: today },
+      // Polymarket-synced rows are catalog mirrors — do not Finnhub-resolve them
+      externalSource: null,
     },
   });
 

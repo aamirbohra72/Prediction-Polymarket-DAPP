@@ -13,6 +13,7 @@
     "db:push": "prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate",
     "db:migrate": "prisma migrate dev --schema=packages/database/prisma/schema.prisma",
     "db:seed": "node packages/database/prisma/seed.js",
+    "sync:polymarket": "node scripts/sync-polymarket.mjs",
     "lint": "turbo lint",
     "kafka:up": "docker compose up -d",
     "kafka:down": "docker compose down"

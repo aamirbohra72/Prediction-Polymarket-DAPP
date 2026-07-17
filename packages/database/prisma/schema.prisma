@@ -143,6 +143,14 @@ model Market {
   status         MarketStatus     @default(OPEN)
   winningOutcome Outcome?
   resolvedPrice  Decimal?         @db.Decimal(14, 4)
+  /// External catalog id e.g. pmus:208967 — null for seeded/local markets
+  externalId     String?          @unique
+  /// e.g. POLYMARKET_US — null means local/seed (Finnhub-resolvable)
+  externalSource String?
+  /// Parent Polymarket event id for multi-target grouping
+  externalEventId String?
+  /// Last known YES probability (cents) from Polymarket when book is empty
+  externalYesCents Int?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   orders         Order[]
@@ -158,6 +166,8 @@ model Market {
   @@index([status])
   @@index([symbol])
   @@index([category])
+  @@index([externalSource])
+  @@index([externalEventId])
 }
 
 model PriceSnapshot {

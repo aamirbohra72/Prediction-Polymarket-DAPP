@@ -70,6 +70,10 @@ export function formatMarket(market) {
     resolvedPrice: market.resolvedPrice ? toNumber(market.resolvedPrice) : null,
     category: market.category ?? "STOCK",
     description: market.description ?? null,
+    externalId: market.externalId ?? null,
+    externalSource: market.externalSource ?? null,
+    externalEventId: market.externalEventId ?? null,
+    externalYesCents: market.externalYesCents ?? null,
     createdAt: market.createdAt,
   };
 }

@@ -16,6 +16,8 @@ import {
 } from "../services/onChainMarket.js";
 import { getSolanaConfig, isProgramConfigured } from "@repo/solana";
 import { invalidateMarketsList } from "@repo/platform/cache";
+import { syncPolymarketMarkets } from "../services/polymarketSync.js";
+import { config } from "../config.js";
 
 const router = Router();
 
@@ -177,6 +179,34 @@ router.get("/markets/:id/on-chain", requireAdmin, async (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
+});
+
+router.post("/polymarket/sync", requireAdmin, async (req, res) => {
+  try {
+    const limit = Number(req.body?.limit) || undefined;
+    const includeClosed = Boolean(req.body?.includeClosed);
+    const result = await syncPolymarketMarkets({ limit, includeClosed });
+    res.json({
+      result,
+      note: "Seed/local markets are never modified. Synced rows use externalSource=POLYMARKET_US.",
+    });
+  } catch (err) {
+    console.error("[polymarket] sync failed:", err);
+    res.status(500).json({ error: err.message || "Polymarket sync failed" });
+  }
+});
+
+router.get("/polymarket/status", requireAdmin, async (_req, res) => {
+  const count = await prisma.market.count({
+    where: { externalSource: "POLYMARKET_US" },
+  });
+  res.json({
+    enabled: config.polymarketSyncEnabled,
+    syncOnStart: config.polymarketSyncOnStart,
+    syncedMarkets: count,
+    hasApiKeys: Boolean(config.polymarketKeyId && config.polymarketSecretKey),
+    publicDataOnly: !(config.polymarketKeyId && config.polymarketSecretKey),
+  });
 });
 
 export default router;

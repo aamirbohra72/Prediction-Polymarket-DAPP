@@ -2,7 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { prisma, Prisma } from "@repo/database";
 import { config } from "../config.js";
-import { signToken } from "../middleware/auth.js";
+import { signToken, ensureAdminForConfiguredEmail } from "../middleware/auth.js";
 import { formatUser } from "../utils/helpers.js";
 import { sendWelcomeEmail } from "@repo/platform/email";
 
@@ -67,13 +67,15 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ error: "Email and password required" });
     }
 
-    const user = await prisma.user.findUnique({
+    let user = await prisma.user.findUnique({
       where: { email: email.toLowerCase().trim() },
     });
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
+
+    user = await ensureAdminForConfiguredEmail(user);
 
     const token = signToken(user);
     res.json({ token, user: formatUser(user) });

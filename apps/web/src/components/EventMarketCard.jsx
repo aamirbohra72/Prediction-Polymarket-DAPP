@@ -29,6 +29,7 @@ export default function EventMarketCard({ event }) {
             {event.title}
           </h2>
           <p className="mt-1 text-[11px] text-[var(--muted)]">
+            {event.externalSource === "POLYMARKET_US" ? "Polymarket US · " : ""}
             {event.symbol} · {categoryLabel(event.category)}
           </p>
         </div>

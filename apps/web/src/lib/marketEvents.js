@@ -28,7 +28,7 @@ export function symbolEmoji(symbol) {
 
 /**
  * Group flat markets into Polymarket-style events:
- * same symbol + same resolve month → one card with multiple strike rows.
+ * prefer externalEventId; else same symbol + resolve month.
  */
 export function groupMarketsIntoEvents(markets) {
   const map = new Map();
@@ -36,7 +36,9 @@ export function groupMarketsIntoEvents(markets) {
   for (const m of markets) {
     const d = new Date(m.resolveDate);
     const monthKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-    const key = `${m.category || "STOCK"}|${m.symbol}|${monthKey}`;
+    const key = m.externalEventId
+      ? `ext:${m.externalEventId}`
+      : `${m.category || "STOCK"}|${m.symbol}|${monthKey}`;
 
     if (!map.has(key)) {
       map.set(key, {
@@ -45,6 +47,7 @@ export function groupMarketsIntoEvents(markets) {
         category: m.category || "STOCK",
         monthKey,
         resolveDate: m.resolveDate,
+        externalSource: m.externalSource || null,
         markets: [],
       });
     }
@@ -75,7 +78,9 @@ export function groupMarketsIntoEvents(markets) {
       volume,
       impliedYesPrice: top?.impliedYesPrice ?? 50,
       resolveDate: earliest.resolveDate,
-      title: eventTitle(ev.symbol, earliest.resolveDate),
+      title: ev.externalSource
+        ? sorted[0]?.title || eventTitle(ev.symbol, earliest.resolveDate)
+        : eventTitle(ev.symbol, earliest.resolveDate),
       timeframeLabel: timeframeLabelForDate(earliest.resolveDate),
     };
   });

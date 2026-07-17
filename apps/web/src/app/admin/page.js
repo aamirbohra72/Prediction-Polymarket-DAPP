@@ -244,6 +244,30 @@ export default function AdminPage() {
         </button>
         <button
           type="button"
+          disabled={syncing === "polymarket"}
+          onClick={async () => {
+            setSyncing("polymarket");
+            setError("");
+            try {
+              const d = await api.syncPolymarket({ limit: 40 });
+              const r = d.result || {};
+              setSuccess(
+                `Polymarket sync: +${r.created || 0} created, ${r.updated || 0} updated (seed markets untouched)`
+              );
+              const m = await api.markets();
+              setMarkets(m.markets);
+            } catch (err) {
+              setError(err.message);
+            } finally {
+              setSyncing(null);
+            }
+          }}
+          className="rounded-lg border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-4 py-2 text-sm text-[var(--accent)] hover:bg-[var(--accent)]/20 disabled:opacity-50"
+        >
+          {syncing === "polymarket" ? "Syncing Polymarket…" : "Sync Polymarket US (catalog)"}
+        </button>
+        <button
+          type="button"
           onClick={async () => {
             try {
               await api.resolveDueMarkets();
