@@ -42,6 +42,82 @@ async function seedPriceHistory(marketId, startCents) {
   await prisma.priceSnapshot.createMany({ data: rows });
 }
 
+/** Resting limit orders so the market depth chart / ladder has visible levels. */
+async function seedOrderBook(marketId, midCents, makerId) {
+  const openCount = await prisma.order.count({
+    where: { marketId, status: "OPEN" },
+  });
+  if (openCount > 0) return;
+
+  const mid = Math.max(20, Math.min(80, midCents));
+  const levels = [];
+
+  // YES bids below mid, YES asks above mid
+  for (let i = 1; i <= 6; i++) {
+    levels.push({
+      userId: makerId,
+      marketId,
+      outcome: "YES",
+      side: "BUY",
+      priceCents: mid - i * 2,
+      quantity: 15 + i * 8,
+      filledQty: 0,
+      status: "OPEN",
+    });
+    levels.push({
+      userId: makerId,
+      marketId,
+      outcome: "YES",
+      side: "SELL",
+      priceCents: mid + i * 2,
+      quantity: 12 + i * 7,
+      filledQty: 0,
+      status: "OPEN",
+    });
+  }
+
+  // NO book (complementary-ish)
+  for (let i = 1; i <= 4; i++) {
+    levels.push({
+      userId: makerId,
+      marketId,
+      outcome: "NO",
+      side: "BUY",
+      priceCents: 100 - mid - i * 2,
+      quantity: 10 + i * 5,
+      filledQty: 0,
+      status: "OPEN",
+    });
+    levels.push({
+      userId: makerId,
+      marketId,
+      outcome: "NO",
+      side: "SELL",
+      priceCents: 100 - mid + i * 2,
+      quantity: 10 + i * 5,
+      filledQty: 0,
+      status: "OPEN",
+    });
+  }
+
+  await prisma.order.createMany({ data: levels });
+
+  // Give maker enough shares to cover the SELL legs
+  await prisma.position.upsert({
+    where: { userId_marketId: { userId: makerId, marketId } },
+    update: {
+      yesShares: { increment: 500 },
+      noShares: { increment: 500 },
+    },
+    create: {
+      userId: makerId,
+      marketId,
+      yesShares: 500,
+      noShares: 500,
+    },
+  });
+}
+
 async function main() {
   const adminEmail = (process.env.ADMIN_EMAIL || "admin@example.com").toLowerCase();
   const passwordHash = await bcrypt.hash("admin123", 10);
@@ -54,6 +130,18 @@ async function main() {
       passwordHash,
       isAdmin: true,
       balance: new Prisma.Decimal(10000),
+    },
+  });
+
+  const makerHash = await bcrypt.hash("maker123", 10);
+  const maker = await prisma.user.upsert({
+    where: { email: "marketmaker@example.com" },
+    update: { balance: new Prisma.Decimal(50000) },
+    create: {
+      email: "marketmaker@example.com",
+      passwordHash: makerHash,
+      displayName: "Market Maker",
+      balance: new Prisma.Decimal(50000),
     },
   });
 
@@ -136,9 +224,10 @@ async function main() {
     }
 
     await seedPriceHistory(market.id, m.start);
+    await seedOrderBook(market.id, m.start, maker.id);
   }
 
-  console.log("Seed complete — markets + chart history ready.");
+  console.log("Seed complete — markets + chart history + order book depth ready.");
   console.log(`Admin login: ${adminEmail} / admin123`);
 }
 

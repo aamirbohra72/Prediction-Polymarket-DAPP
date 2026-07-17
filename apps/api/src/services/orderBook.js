@@ -5,11 +5,23 @@ function aggregateLevels(orders) {
   for (const o of orders) {
     const rem = o.quantity - o.filledQty;
     if (rem <= 0) continue;
-    map.set(o.priceCents, (map.get(o.priceCents) || 0) + rem);
+    const current = map.get(o.priceCents) || { quantity: 0, orderCount: 0 };
+    map.set(o.priceCents, {
+      quantity: current.quantity + rem,
+      orderCount: current.orderCount + 1,
+    });
   }
   return [...map.entries()]
-    .map(([priceCents, quantity]) => ({ priceCents, quantity }))
+    .map(([priceCents, level]) => ({ priceCents, ...level }))
     .sort((a, b) => a.priceCents - b.priceCents);
+}
+
+function withCumulative(levels) {
+  let cumulativeQty = 0;
+  return levels.map((level) => {
+    cumulativeQty += level.quantity;
+    return { ...level, cumulativeQty };
+  });
 }
 
 export async function getOrderBookSnapshot(marketId) {
@@ -70,10 +82,10 @@ export async function getOrderBookSnapshot(marketId) {
       createdAt: t.createdAt,
     })),
     depth: {
-      yesBids: aggregateLevels(yesBids).sort((a, b) => b.priceCents - a.priceCents),
-      yesAsks: aggregateLevels(yesAsks),
-      noBids: aggregateLevels(noBids).sort((a, b) => b.priceCents - a.priceCents),
-      noAsks: aggregateLevels(noAsks),
+      yesBids: withCumulative(aggregateLevels(yesBids).sort((a, b) => b.priceCents - a.priceCents)),
+      yesAsks: withCumulative(aggregateLevels(yesAsks)),
+      noBids: withCumulative(aggregateLevels(noBids).sort((a, b) => b.priceCents - a.priceCents)),
+      noAsks: withCumulative(aggregateLevels(noAsks)),
     },
     openOrders: openOrders
       .filter((o) => o.quantity - o.filledQty > 0)

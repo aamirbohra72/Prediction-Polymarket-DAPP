@@ -42,7 +42,15 @@ router.get("/market/:id", async (req, res) => {
         })}\n\n`
       );
     } catch (e) {
-      res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`);
+      if (!closed) {
+        res.write(
+          `data: ${JSON.stringify({
+            error: e.message,
+            retry: true,
+            at: Date.now(),
+          })}\n\n`
+        );
+      }
     }
   }
 

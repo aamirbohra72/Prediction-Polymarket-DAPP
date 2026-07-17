@@ -8,6 +8,7 @@ import Countdown from "@/components/Countdown";
 import OrderBook from "@/components/OrderBook";
 import PriceChart from "@/components/PriceChart";
 import TradePanel from "@/components/TradePanel";
+import TradesTape from "@/components/TradesTape";
 import WatchlistStar from "@/components/WatchlistStar";
 
 export default function MarketPage() {
@@ -69,7 +70,6 @@ export default function MarketPage() {
         const data = JSON.parse(ev.data);
         if (data.market) {
           setMarket(data.market);
-          if (data.market.impliedYesPrice) setPriceCents(data.market.impliedYesPrice);
         }
       } catch {
         /* ignore */
@@ -112,6 +112,14 @@ export default function MarketPage() {
     } catch (err) {
       setError(err.message);
     }
+  }
+
+  function pickBookLevel({ priceCents: pickedPrice, side: pickedSide }) {
+    setOutcome(bookOutcome);
+    setSide(pickedSide);
+    setPriceCents(pickedPrice);
+    setOrderType("LIMIT");
+    setError(`Loaded ${pickedSide} ${bookOutcome} at ${pickedPrice}¢ into the trade ticket`);
   }
 
   async function postComment(e) {
@@ -218,8 +226,10 @@ export default function MarketPage() {
                 ))}
               </div>
             </div>
-            <OrderBook depth={market.depth} outcome={bookOutcome} />
+            <OrderBook depth={market.depth} outcome={bookOutcome} onLevelClick={pickBookLevel} />
           </div>
+
+          <TradesTape trades={market.recentTrades} />
 
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
             <h2 className="mb-4 font-semibold">Activity</h2>
