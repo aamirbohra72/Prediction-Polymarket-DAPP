@@ -5,6 +5,7 @@ import { formatMarket } from "../utils/helpers.js";
 import { prisma } from "@repo/database";
 import { getMarketOpenInterest } from "../services/stats.js";
 import { fetchLiveQuote } from "../services/stockPrice.js";
+import { getGlobalActivity } from "../services/activityFeed.js";
 
 const router = Router();
 
@@ -37,7 +38,13 @@ router.get("/market/:id", async (req, res) => {
 
       res.write(
         `data: ${JSON.stringify({
-          market: { ...formatMarket(market), ...book, openInterest, priceHistory: history, liveQuote: quote },
+          market: {
+            ...formatMarket(market),
+            ...book,
+            openInterest,
+            priceHistory: history,
+            liveQuote: quote,
+          },
           at: Date.now(),
         })}\n\n`
       );
@@ -56,7 +63,46 @@ router.get("/market/:id", async (req, res) => {
 
   await push();
   const interval = setInterval(push, 3000);
+  req.on("close", () => clearInterval(interval));
+});
 
+/** Live global activity feed (SSE). Polls every 5s. */
+router.get("/activity", async (req, res) => {
+  const type = String(req.query.type || "all");
+  const limit = Math.min(Number(req.query.limit) || 40, 80);
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  let closed = false;
+  req.on("close", () => {
+    closed = true;
+  });
+
+  async function push() {
+    if (closed) return;
+    try {
+      const activity = await getGlobalActivity({ limit, type, userId: null });
+      res.write(
+        `data: ${JSON.stringify({ activity, type, at: Date.now() })}\n\n`
+      );
+    } catch (e) {
+      if (!closed) {
+        res.write(
+          `data: ${JSON.stringify({
+            error: e.message,
+            retry: true,
+            at: Date.now(),
+          })}\n\n`
+        );
+      }
+    }
+  }
+
+  await push();
+  const interval = setInterval(push, 5000);
   req.on("close", () => clearInterval(interval));
 });
 

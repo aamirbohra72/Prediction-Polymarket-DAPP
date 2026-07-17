@@ -1,10 +1,11 @@
-import { Router } from "express";
-import { prisma } from "@repo/database";
-import { config } from "../config.js";
-import { requireAuth } from "../middleware/auth.js";
 import { optionalAuth } from "../middleware/optionalAuth.js";
 import { formatMarket, maskEmail } from "../utils/helpers.js";
-import { getOrderBookSnapshot, getMarketExecutionPrice } from "../services/orderBook.js";
+import {
+  getOrderBookSnapshot,
+  getMarketExecutionPrice,
+  getMarketBookSummaries,
+  getOpenInterestForMarkets,
+} from "../services/orderBook.js";
 import { getPriceHistory } from "../services/priceHistory.js";
 import { tryMatchOrder, mintSharesForBuy, releaseSharesForSell } from "../services/matching.js";
 import { emitOrderPlaced } from "../services/eventBus.js";
@@ -13,6 +14,11 @@ import { cacheGet, cacheSet } from "@repo/platform/redis";
 import { isKafkaEnabled, isProducerReady } from "@repo/kafka";
 import { getMarketOpenInterest } from "../services/stats.js";
 import { fetchLiveQuote } from "../services/stockPrice.js";
+import { invalidateActivityCache } from "../services/activityFeed.js";
+import { requireAuth } from "../middleware/auth.js";
+import { Router } from "express";
+import { prisma } from "@repo/database";
+import { config } from "../config.js";
 
 const router = Router();
 
@@ -30,13 +36,6 @@ router.get("/", optionalAuth, async (req, res) => {
   const { status, symbol, sort, category, watchlist } = req.query;
   const cacheKeyPart = marketsCacheKey(req.query);
   const redisKey = cacheKeyPart ? CACHE_KEYS.marketsList(cacheKeyPart) : null;
-
-  if (redisKey && !req.user) {
-    const cached = await cacheGet(redisKey);
-    if (cached?.markets) {
-      return res.json({ markets: cached.markets, meta: { cached: true, cachedAt: cached.cachedAt } });
-    }
-  }
 
   const where = {};
 
@@ -63,10 +62,56 @@ router.get("/", optionalAuth, async (req, res) => {
     where.id = { in: marketIds };
   }
 
-  const markets = await prisma.market.findMany({
-    where,
-    orderBy: [{ status: "asc" }, { resolveDate: "asc" }],
-  });
+  // Base market list is user-independent (no watchlist flag) so it can be
+  // shared across all users via cache. The N+1 book/OI lookups are batched.
+  let baseMarkets = null;
+  let cachedAt = null;
+
+  if (redisKey) {
+    const cached = await cacheGet(redisKey);
+    if (cached?.markets) {
+      baseMarkets = cached.markets;
+      cachedAt = cached.cachedAt;
+    }
+  }
+
+  if (!baseMarkets) {
+    const markets = await prisma.market.findMany({
+      where,
+      orderBy: [{ status: "asc" }, { resolveDate: "asc" }],
+    });
+    const ids = markets.map((m) => m.id);
+
+    const [summaries, oiMap] = await Promise.all([
+      getMarketBookSummaries(ids),
+      getOpenInterestForMarkets(ids),
+    ]);
+
+    baseMarkets = markets.map((m) => ({
+      ...formatMarket(m),
+      ...(summaries.get(m.id) ?? { impliedYesPrice: 50, spread: null, volume: 0 }),
+      openInterest: oiMap.get(m.id) ?? 0,
+    }));
+
+    if (sort === "volume") {
+      baseMarkets.sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0));
+    } else if (sort === "yesPrice") {
+      baseMarkets.sort((a, b) => (b.impliedYesPrice ?? 0) - (a.impliedYesPrice ?? 0));
+    } else if (sort === "resolveDate") {
+      baseMarkets.sort(
+        (a, b) => new Date(a.resolveDate).getTime() - new Date(b.resolveDate).getTime()
+      );
+    }
+
+    if (redisKey) {
+      cachedAt = Date.now();
+      await cacheSet(
+        redisKey,
+        { markets: baseMarkets, cachedAt },
+        config.cacheLeaderboardTtl || 60
+      );
+    }
+  }
 
   let watchSet = new Set();
   if (req.user) {
@@ -77,39 +122,15 @@ router.get("/", optionalAuth, async (req, res) => {
     watchSet = new Set(wl.map((w) => w.marketId));
   }
 
-  const enriched = await Promise.all(
-    markets.map(async (m) => {
-      const book = await getOrderBookSnapshot(m.id);
-      const openInterest = await getMarketOpenInterest(m.id);
-      return {
-        ...formatMarket(m),
-        ...book,
-        openInterest,
-        watchlisted: watchSet.has(m.id),
-      };
-    })
-  );
+  const marketsOut = baseMarkets.map((m) => ({
+    ...m,
+    watchlisted: watchSet.has(m.id),
+  }));
 
-  const sorted = [...enriched];
-  if (sort === "volume") {
-    sorted.sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0));
-  } else if (sort === "yesPrice") {
-    sorted.sort((a, b) => (b.impliedYesPrice ?? 0) - (a.impliedYesPrice ?? 0));
-  } else if (sort === "resolveDate") {
-    sorted.sort(
-      (a, b) => new Date(a.resolveDate).getTime() - new Date(b.resolveDate).getTime()
-    );
-  }
-
-  if (redisKey && !req.user) {
-    await cacheSet(
-      redisKey,
-      { markets: sorted, cachedAt: Date.now() },
-      config.cacheLeaderboardTtl || 60
-    );
-  }
-
-  res.json({ markets: sorted, meta: { cached: false } });
+  res.json({
+    markets: marketsOut,
+    meta: { cached: cachedAt != null && baseMarkets != null, cachedAt },
+  });
 });
 
 router.get("/:id/history", async (req, res) => {
@@ -129,6 +150,9 @@ router.get("/:id/quote", async (req, res) => {
 
 router.get("/:id/activity", async (req, res) => {
   const marketId = req.params.id;
+  const market = await prisma.market.findUnique({ where: { id: marketId } });
+  if (!market) return res.status(404).json({ error: "Market not found" });
+
   const [trades, comments] = await Promise.all([
     prisma.trade.findMany({
       where: { marketId },
@@ -143,42 +167,83 @@ router.get("/:id/activity", async (req, res) => {
     }),
   ]);
 
-  res.json({
-    activity: [
-      ...trades.map((t) => ({
-        type: "trade",
-        at: t.createdAt,
-        text: `${t.quantity} ${t.outcome} traded @ ${t.priceCents}¢`,
-      })),
-      ...comments.map((c) => ({
-        type: "comment",
-        at: c.createdAt,
-        text: c.body,
-        author: c.user.displayName || maskEmail(c.user.email),
-      })),
-    ].sort((a, b) => new Date(b.at) - new Date(a.at)),
-  });
+  const activity = [
+    ...trades.map((t) => ({
+      type: "trade",
+      at: t.createdAt,
+      text: `${t.quantity} ${t.outcome} traded @ ${t.priceCents}¢`,
+    })),
+    ...comments.map((c) => ({
+      type: "comment",
+      at: c.createdAt,
+      text: c.body,
+      author: c.user.displayName || maskEmail(c.user.email),
+    })),
+  ];
+
+  if (market.status === "RESOLVED") {
+    activity.push({
+      type: "resolution",
+      at: market.resolveDate,
+      text: `Market resolved ${market.winningOutcome || "—"}`,
+    });
+  }
+
+  activity.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  res.json({ activity });
 });
 
-router.get("/:id/comments", async (req, res) => {
+router.get("/:id/comments", optionalAuth, async (req, res) => {
+  const viewerId = req.user?.id;
   const comments = await prisma.marketComment.findMany({
-    where: { marketId: req.params.id },
+    where: { marketId: req.params.id, parentId: null },
     orderBy: { createdAt: "desc" },
     take: 50,
-    include: { user: { select: { displayName: true, email: true } } },
+    include: {
+      user: { select: { id: true, displayName: true, email: true } },
+      replies: {
+        orderBy: { createdAt: "asc" },
+        take: 20,
+        include: {
+          user: { select: { id: true, displayName: true, email: true } },
+          _count: { select: { likes: true } },
+          likes: viewerId
+            ? { where: { userId: viewerId }, select: { id: true } }
+            : false,
+        },
+      },
+      _count: { select: { likes: true, replies: true } },
+      likes: viewerId
+        ? { where: { userId: viewerId }, select: { id: true } }
+        : false,
+    },
   });
+
   res.json({
     comments: comments.map((c) => ({
       id: c.id,
       body: c.body,
       author: c.user.displayName || maskEmail(c.user.email),
+      authorId: c.user.id,
       createdAt: c.createdAt,
+      likeCount: c._count.likes,
+      replyCount: c._count.replies,
+      likedByMe: Array.isArray(c.likes) ? c.likes.length > 0 : false,
+      replies: (c.replies || []).map((r) => ({
+        id: r.id,
+        body: r.body,
+        author: r.user.displayName || maskEmail(r.user.email),
+        authorId: r.user.id,
+        createdAt: r.createdAt,
+        likeCount: r._count.likes,
+        likedByMe: Array.isArray(r.likes) ? r.likes.length > 0 : false,
+      })),
     })),
   });
 });
 
 router.post("/:id/comments", requireAuth, async (req, res) => {
-  const { body } = req.body;
+  const { body, parentId } = req.body;
   if (!body || String(body).trim().length < 2) {
     return res.status(400).json({ error: "Comment too short" });
   }
@@ -189,15 +254,59 @@ router.post("/:id/comments", requireAuth, async (req, res) => {
   const market = await prisma.market.findUnique({ where: { id: req.params.id } });
   if (!market) return res.status(404).json({ error: "Market not found" });
 
+  if (parentId) {
+    const parent = await prisma.marketComment.findFirst({
+      where: { id: parentId, marketId: market.id },
+    });
+    if (!parent) return res.status(404).json({ error: "Parent comment not found" });
+  }
+
   const comment = await prisma.marketComment.create({
     data: {
       userId: req.user.id,
       marketId: market.id,
       body: String(body).trim(),
+      parentId: parentId || null,
     },
   });
 
-  res.status(201).json({ comment });
+  await invalidateActivityCache().catch(() => {});
+
+  res.status(201).json({
+    comment: {
+      id: comment.id,
+      body: comment.body,
+      parentId: comment.parentId,
+      createdAt: comment.createdAt,
+    },
+  });
+});
+
+router.post("/:id/comments/:commentId/like", requireAuth, async (req, res) => {
+  const comment = await prisma.marketComment.findFirst({
+    where: { id: req.params.commentId, marketId: req.params.id },
+  });
+  if (!comment) return res.status(404).json({ error: "Comment not found" });
+
+  await prisma.commentLike.upsert({
+    where: {
+      userId_commentId: { userId: req.user.id, commentId: comment.id },
+    },
+    create: { userId: req.user.id, commentId: comment.id },
+    update: {},
+  });
+  const likeCount = await prisma.commentLike.count({ where: { commentId: comment.id } });
+  res.json({ liked: true, likeCount });
+});
+
+router.delete("/:id/comments/:commentId/like", requireAuth, async (req, res) => {
+  await prisma.commentLike.deleteMany({
+    where: { userId: req.user.id, commentId: req.params.commentId },
+  });
+  const likeCount = await prisma.commentLike.count({
+    where: { commentId: req.params.commentId },
+  });
+  res.json({ liked: false, likeCount });
 });
 
 router.get("/:id", optionalAuth, async (req, res) => {

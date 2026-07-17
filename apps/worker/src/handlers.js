@@ -42,7 +42,14 @@ async function handleTradeExecuted(payload) {
     );
   }
   await invalidateAfterTrade(payload.buyerId, payload.sellerId);
-  await cacheDel("cache:activity:global:v1");
+  await cacheDel(
+    "cache:activity:global:v1",
+    "cache:activity:global:v2",
+    "cache:activity:global:v3:all:40",
+    "cache:activity:global:v3:all:50",
+    "cache:activity:global:v3:trade:40",
+    "cache:activity:global:v3:highlight:40"
+  );
   console.log(
     `[worker] trade.executed ${payload.quantity} ${payload.outcome} @ ${payload.priceCents}c`
   );

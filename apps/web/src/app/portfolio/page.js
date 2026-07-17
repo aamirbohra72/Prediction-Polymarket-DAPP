@@ -10,19 +10,22 @@ export default function PortfolioPage() {
   const [positions, setPositions] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [openOrders, setOpenOrders] = useState([]);
+  const [myActivity, setMyActivity] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
   async function load() {
-    const [data, orders] = await Promise.all([
+    const [data, orders, act] = await Promise.all([
       api.portfolio(),
       api.openOrders().catch(() => ({ orders: [] })),
+      api.myActivity(25).catch(() => ({ activity: [] })),
     ]);
     setUser(data.user);
     setStats(data.stats);
     setPositions(data.positions);
     setTransactions(data.transactions);
     setOpenOrders(orders.orders);
+    setMyActivity(act.activity || []);
   }
 
   useEffect(() => {
@@ -181,6 +184,48 @@ export default function PortfolioPage() {
               </tbody>
             </table>
           </div>
+        )}
+      </section>
+
+      <section className="mt-10">
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">Your activity</h2>
+          <Link href="/activity?type=mine" className="text-sm text-[var(--accent)] hover:underline">
+            Open full feed →
+          </Link>
+        </div>
+        {myActivity.length === 0 ? (
+          <p className="text-[var(--muted)]">
+            No personal fills, comments, or deposits yet. Trade or comment to populate this.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {myActivity.map((item) => (
+              <li
+                key={item.id}
+                className="flex flex-wrap items-start justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm"
+              >
+                <div>
+                  <span className="mr-2 text-[10px] font-semibold uppercase text-[var(--muted)]">
+                    {item.type}
+                  </span>
+                  {item.href ? (
+                    <Link href={item.href} className="hover:text-[var(--accent)]">
+                      {item.text}
+                    </Link>
+                  ) : (
+                    <span>{item.text}</span>
+                  )}
+                  {item.market && (
+                    <span className="ml-2 text-xs text-[var(--muted)]">{item.market.symbol}</span>
+                  )}
+                </div>
+                <span className="text-xs text-[var(--muted)]">
+                  {new Date(item.at).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
     </div>

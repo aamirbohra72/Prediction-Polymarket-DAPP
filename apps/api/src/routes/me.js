@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { prisma } from "@repo/database";
 import { requireAuth } from "../middleware/auth.js";
-import { formatUser, formatMarket, toNumber } from "../utils/helpers.js";
+import { formatUser, formatMarket, toNumber, maskEmail } from "../utils/helpers.js";
 import { getUserStatsCached, getPortfolioBundleCached } from "../services/portfolioCache.js";
 import { getOrderBookSnapshot } from "../services/orderBook.js";
 import { invalidateUserCache } from "../services/cacheKeys.js";
 import { getUserAnalytics } from "../services/analytics.js";
+import { getPersonalActivity, invalidateActivityCache } from "../services/activityFeed.js";
 
 const router = Router();
 
@@ -243,6 +244,78 @@ router.delete("/alerts/:id", requireAuth, async (req, res) => {
     where: { id: req.params.id, userId: req.user.id },
   });
   res.json({ success: true });
+});
+
+/** Personal fills / cancels / deposits activity for Portfolio. */
+router.get("/activity", requireAuth, async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 40, 80);
+  const activity = await getPersonalActivity(req.user.id, limit);
+
+  const cancels = await prisma.transaction.findMany({
+    where: { userId: req.user.id, type: "ORDER_CANCEL_REFUND" },
+    orderBy: { createdAt: "desc" },
+    take: 15,
+  });
+  const cancelItems = cancels.map((t) => ({
+    id: `cancel-${t.id}`,
+    type: "cancel",
+    at: t.createdAt,
+    text: `Order cancelled · refund $${toNumber(t.amount).toFixed(2)}`,
+    href: "/portfolio",
+  }));
+
+  const merged = [...activity, ...cancelItems]
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+    .slice(0, limit);
+
+  res.json({ activity: merged });
+});
+
+router.get("/following", requireAuth, async (req, res) => {
+  const rows = await prisma.userFollow.findMany({
+    where: { followerId: req.user.id },
+    include: {
+      following: { select: { id: true, displayName: true, email: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  res.json({
+    following: rows.map((r) => ({
+      id: r.following.id,
+      displayName: r.following.displayName || maskEmail(r.following.email),
+      followedAt: r.createdAt,
+    })),
+  });
+});
+
+router.post("/follow/:userId", requireAuth, async (req, res) => {
+  const targetId = req.params.userId;
+  if (targetId === req.user.id) {
+    return res.status(400).json({ error: "Cannot follow yourself" });
+  }
+  const target = await prisma.user.findUnique({ where: { id: targetId } });
+  if (!target) return res.status(404).json({ error: "User not found" });
+
+  await prisma.userFollow.upsert({
+    where: {
+      followerId_followingId: {
+        followerId: req.user.id,
+        followingId: targetId,
+      },
+    },
+    create: { followerId: req.user.id, followingId: targetId },
+    update: {},
+  });
+  await invalidateActivityCache().catch(() => {});
+  res.json({ following: true });
+});
+
+router.delete("/follow/:userId", requireAuth, async (req, res) => {
+  await prisma.userFollow.deleteMany({
+    where: { followerId: req.user.id, followingId: req.params.userId },
+  });
+  await invalidateActivityCache().catch(() => {});
+  res.json({ following: false });
 });
 
 export default router;

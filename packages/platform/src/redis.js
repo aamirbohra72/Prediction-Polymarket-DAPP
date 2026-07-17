@@ -57,7 +57,10 @@ export async function connectRedis() {
   }
 
   const redis = initIoRedis();
-  if (!redis) return false;
+  if (!redis) {
+    console.warn("[redis] No Redis configured — using in-memory cache fallback");
+    return false;
+  }
 
   try {
     if (redis.status !== "ready") await redis.connect();
@@ -66,7 +69,7 @@ export async function connectRedis() {
     return true;
   } catch (err) {
     ready = false;
-    console.warn("[redis] TCP unavailable:", err.message);
+    console.warn("[redis] TCP unavailable:", err.message, "— using in-memory cache fallback");
     return false;
   }
 }
@@ -76,12 +79,47 @@ export function isRedisReady() {
   return ready && ioredisClient?.status === "ready";
 }
 
+/**
+ * In-memory fallback so caching still works when Redis is unavailable
+ * (e.g. Upstash DB deleted, TCP blocked). Single-process only — for
+ * multi-instance production you still want a shared Redis, but this keeps
+ * the app fast and degrades gracefully instead of hitting the DB every time.
+ */
+const memStore = new Map(); // key -> { value, expiresAt }
+const MEM_MAX_KEYS = 1000;
+
+function memGet(key) {
+  const entry = memStore.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt && entry.expiresAt < Date.now()) {
+    memStore.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+function memSet(key, value, ttlSeconds) {
+  if (memStore.size >= MEM_MAX_KEYS) {
+    const now = Date.now();
+    for (const [k, v] of memStore) {
+      if (v.expiresAt && v.expiresAt < now) memStore.delete(k);
+    }
+    if (memStore.size >= MEM_MAX_KEYS) {
+      memStore.delete(memStore.keys().next().value);
+    }
+  }
+  memStore.set(key, {
+    value,
+    expiresAt: ttlSeconds > 0 ? Date.now() + ttlSeconds * 1000 : 0,
+  });
+}
+
 export function getRedisMode() {
   return mode;
 }
 
 export async function cacheGet(key) {
-  if (!isRedisReady()) return null;
+  if (!isRedisReady()) return memGet(key);
   try {
     if (mode === "upstash-rest") {
       const raw = await upstashClient.get(key);
@@ -92,12 +130,15 @@ export async function cacheGet(key) {
     if (!raw) return null;
     return JSON.parse(raw);
   } catch {
-    return null;
+    return memGet(key);
   }
 }
 
 export async function cacheSet(key, value, ttlSeconds) {
-  if (!isRedisReady()) return false;
+  if (!isRedisReady()) {
+    memSet(key, value, ttlSeconds);
+    return true;
+  }
   try {
     const payload = JSON.stringify(value);
     if (mode === "upstash-rest") {
@@ -109,12 +150,15 @@ export async function cacheSet(key, value, ttlSeconds) {
     else await ioredisClient.set(key, payload);
     return true;
   } catch {
-    return false;
+    memSet(key, value, ttlSeconds);
+    return true;
   }
 }
 
 export async function cacheDel(...keys) {
-  if (!isRedisReady() || keys.length === 0) return;
+  if (keys.length === 0) return;
+  for (const k of keys) memStore.delete(k);
+  if (!isRedisReady()) return;
   try {
     if (mode === "upstash-rest") await upstashClient.del(...keys);
     else await ioredisClient.del(...keys);

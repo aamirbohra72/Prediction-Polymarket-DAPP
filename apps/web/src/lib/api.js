@@ -5,6 +5,8 @@ function getToken() {
   return localStorage.getItem("token");
 }
 
+export { getToken };
+
 export function setToken(token) {
   if (typeof window === "undefined") return;
   if (token) localStorage.setItem("token", token);
@@ -52,14 +54,26 @@ export const api = {
     return request(`/markets${qs ? `?${qs}` : ""}`);
   },
   leaderboard: () => request("/leaderboard"),
-  activity: (limit = 40) => request(`/activity?limit=${limit}`),
+  activity: (limit = 40, type = "all") =>
+    request(`/activity?limit=${limit}&type=${encodeURIComponent(type)}`),
+  myActivity: (limit = 40) => request(`/me/activity?limit=${limit}`),
   myAnalytics: () => request("/me/analytics"),
   openOrders: () => request("/me/orders/open"),
   market: (id) => request(`/markets/${id}`),
   marketActivity: (id) => request(`/markets/${id}/activity`),
   marketComments: (id) => request(`/markets/${id}/comments`),
-  postComment: (id, body) =>
-    request(`/markets/${id}/comments`, { method: "POST", body: JSON.stringify({ body }) }),
+  postComment: (id, body, parentId = null) =>
+    request(`/markets/${id}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ body, parentId }),
+    }),
+  likeComment: (marketId, commentId) =>
+    request(`/markets/${marketId}/comments/${commentId}/like`, { method: "POST" }),
+  unlikeComment: (marketId, commentId) =>
+    request(`/markets/${marketId}/comments/${commentId}/like`, { method: "DELETE" }),
+  followUser: (userId) => request(`/me/follow/${userId}`, { method: "POST" }),
+  unfollowUser: (userId) => request(`/me/follow/${userId}`, { method: "DELETE" }),
+  following: () => request("/me/following"),
   placeOrder: (marketId, body) =>
     request(`/markets/${marketId}/orders`, {
       method: "POST",
@@ -120,4 +134,8 @@ export const api = {
 
 export function streamMarketUrl(marketId) {
   return `${API_URL}/stream/market/${marketId}`;
+}
+
+export function streamActivityUrl(type = "all", limit = 40) {
+  return `${API_URL}/stream/activity?type=${encodeURIComponent(type)}&limit=${limit}`;
 }

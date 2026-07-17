@@ -1,24 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { api, streamMarketUrl } from "@/lib/api";
 import Countdown from "@/components/Countdown";
+import DiscussionPanel from "@/components/DiscussionPanel";
 import OrderBook from "@/components/OrderBook";
 import PriceChart from "@/components/PriceChart";
 import TradePanel from "@/components/TradePanel";
 import TradesTape from "@/components/TradesTape";
 import WatchlistStar from "@/components/WatchlistStar";
 
-export default function MarketPage() {
+function MarketPageInner() {
   const { id } = useParams();
+  const searchParams = useSearchParams();
   const [market, setMarket] = useState(null);
   const [user, setUser] = useState(null);
   const [position, setPosition] = useState(null);
   const [activity, setActivity] = useState([]);
   const [comments, setComments] = useState([]);
-  const [commentText, setCommentText] = useState("");
   const [alertTarget, setAlertTarget] = useState(60);
   const [alertDir, setAlertDir] = useState("ABOVE");
   const [error, setError] = useState("");
@@ -30,6 +31,27 @@ export default function MarketPage() {
   const [submitting, setSubmitting] = useState(false);
   const [bookOutcome, setBookOutcome] = useState("YES");
   const [orderType, setOrderType] = useState("LIMIT");
+  const [ticketHint, setTicketHint] = useState("");
+  const [followingIds, setFollowingIds] = useState(new Set());
+
+  useEffect(() => {
+    const o = searchParams.get("outcome");
+    const s = searchParams.get("side");
+    const p = searchParams.get("price");
+    const q = searchParams.get("qty");
+    const t = searchParams.get("type");
+    if (o === "YES" || o === "NO") {
+      setOutcome(o);
+      setBookOutcome(o);
+    }
+    if (s === "BUY" || s === "SELL") setSide(s);
+    if (p && Number.isFinite(Number(p))) setPriceCents(Number(p));
+    if (q && Number.isFinite(Number(q))) setQuantity(Number(q));
+    if (t === "MARKET" || t === "LIMIT") setOrderType(t);
+    if (o || s || p) {
+      setTicketHint(`Ticket loaded from feed: ${s || "BUY"} ${o || "YES"} @ ${p || "—"}¢`);
+    }
+  }, [searchParams]);
 
   const loadMeta = useCallback(() => {
     return Promise.all([
@@ -37,12 +59,14 @@ export default function MarketPage() {
       api.positions().catch(() => ({ positions: [] })),
       api.marketActivity(id).catch(() => ({ activity: [] })),
       api.marketComments(id).catch(() => ({ comments: [] })),
-    ]).then(([me, pos, act, comm]) => {
+      api.following().catch(() => ({ following: [] })),
+    ]).then(([me, pos, act, comm, fol]) => {
       if (me) setUser(me.user);
       const p = pos.positions.find((x) => x.market.id === id);
       setPosition(p || null);
       setActivity(act.activity);
       setComments(comm.comments);
+      setFollowingIds(new Set((fol.following || []).map((u) => u.id)));
     });
   }, [id]);
 
@@ -119,20 +143,7 @@ export default function MarketPage() {
     setSide(pickedSide);
     setPriceCents(pickedPrice);
     setOrderType("LIMIT");
-    setError(`Loaded ${pickedSide} ${bookOutcome} at ${pickedPrice}¢ into the trade ticket`);
-  }
-
-  async function postComment(e) {
-    e.preventDefault();
-    if (!user) return;
-    try {
-      await api.postComment(id, commentText);
-      setCommentText("");
-      const comm = await api.marketComments(id);
-      setComments(comm.comments);
-    } catch (err) {
-      setError(err.message);
-    }
+    setTicketHint(`Loaded ${pickedSide} ${bookOutcome} at ${pickedPrice}¢ into the trade ticket`);
   }
 
   async function createAlert(e) {
@@ -231,6 +242,10 @@ export default function MarketPage() {
 
           <TradesTape trades={market.recentTrades} />
 
+          {ticketHint && (
+            <p className="mb-4 text-sm text-[var(--accent)]">{ticketHint}</p>
+          )}
+
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
             <h2 className="mb-4 font-semibold">Activity</h2>
             <ul className="max-h-48 space-y-2 overflow-y-auto text-sm">
@@ -239,7 +254,12 @@ export default function MarketPage() {
               ) : (
                 activity.map((a, i) => (
                   <li key={i} className="flex justify-between gap-2 border-b border-[var(--border)] py-2">
-                    <span>{a.type === "comment" ? `${a.author}: ${a.text}` : a.text}</span>
+                    <span>
+                      <span className="mr-2 text-[10px] font-semibold uppercase text-[var(--muted)]">
+                        {a.type}
+                      </span>
+                      {a.type === "comment" ? `${a.author}: ${a.text}` : a.text}
+                    </span>
                     <span className="shrink-0 text-[var(--muted)]">
                       {new Date(a.at).toLocaleString()}
                     </span>
@@ -249,30 +269,14 @@ export default function MarketPage() {
             </ul>
           </div>
 
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
-            <h2 className="mb-4 font-semibold">Discussion</h2>
-            <ul className="mb-4 max-h-40 space-y-2 overflow-y-auto text-sm">
-              {comments.map((c) => (
-                <li key={c.id} className="rounded-lg bg-[var(--bg)] p-2">
-                  <span className="font-medium">{c.author}</span>
-                  <p className="text-[var(--muted)]">{c.body}</p>
-                </li>
-              ))}
-            </ul>
-            {user && (
-              <form onSubmit={postComment} className="flex gap-2">
-                <input
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Add a comment…"
-                  className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm"
-                />
-                <button type="submit" className="rounded-lg bg-[var(--accent)] px-3 py-2 text-sm text-white">
-                  Post
-                </button>
-              </form>
-            )}
-          </div>
+          <DiscussionPanel
+            marketId={id}
+            user={user}
+            comments={comments}
+            followingIds={followingIds}
+            onRefresh={loadMeta}
+            onError={setError}
+          />
         </div>
 
         <div className="space-y-6">
@@ -387,5 +391,13 @@ export default function MarketPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function MarketPage() {
+  return (
+    <Suspense fallback={<p className="text-[var(--muted)]">Loading market…</p>}>
+      <MarketPageInner />
+    </Suspense>
   );
 }

@@ -118,6 +118,243 @@ async function seedOrderBook(marketId, midCents, makerId) {
   });
 }
 
+const DEMO_COMMENTS = [
+  "Feels underpriced given the recent move.",
+  "Going YES here — momentum looks strong.",
+  "Volatility is high; waiting for a better entry.",
+  "NO looks attractive at these odds.",
+  "Watch the Fed print before sizing up.",
+  "Already filled my limit — nice depth on this book.",
+  "Anyone else seeing the same setup on the weekly?",
+  "Spreads tightened a lot today.",
+];
+
+/**
+ * Demo fills + discussion so /activity and market Activity panels aren't empty.
+ * Creates paired FILLED orders + Trade rows (matching engine schema).
+ */
+async function seedActivity(markets, maker, traders) {
+  const existingTrades = await prisma.trade.count();
+  if (existingTrades > 0) {
+    console.log(`Skipping trade seed — ${existingTrades} trades already exist.`);
+  } else {
+    const tradeRows = [];
+    for (let i = 0; i < 60; i++) {
+      const market = markets[i % markets.length];
+      const buyer = traders[i % traders.length];
+      const seller = i % 3 === 0 ? maker : traders[(i + 1) % traders.length];
+      if (buyer.id === seller.id) continue;
+
+      const outcome = i % 2 === 0 ? "YES" : "NO";
+      const mid = 35 + (i % 30);
+      const qty = 5 + (i % 20);
+      const hoursAgo = 60 - i;
+      const at = new Date(Date.now() - hoursAgo * 60 * 60 * 1000);
+
+      const buyOrder = await prisma.order.create({
+        data: {
+          userId: buyer.id,
+          marketId: market.id,
+          outcome,
+          side: "BUY",
+          priceCents: mid,
+          quantity: qty,
+          filledQty: qty,
+          status: "FILLED",
+          createdAt: at,
+        },
+      });
+      const sellOrder = await prisma.order.create({
+        data: {
+          userId: seller.id,
+          marketId: market.id,
+          outcome,
+          side: "SELL",
+          priceCents: mid,
+          quantity: qty,
+          filledQty: qty,
+          status: "FILLED",
+          createdAt: at,
+        },
+      });
+
+      tradeRows.push({
+        marketId: market.id,
+        buyOrderId: buyOrder.id,
+        sellOrderId: sellOrder.id,
+        buyerId: buyer.id,
+        sellerId: seller.id,
+        outcome,
+        priceCents: mid,
+        quantity: qty,
+        createdAt: at,
+      });
+    }
+    await prisma.trade.createMany({ data: tradeRows });
+    console.log(`Seeded ${tradeRows.length} demo trades.`);
+  }
+
+  const commentCount = await prisma.marketComment.count();
+  if (commentCount < 8) {
+    const bodies = [];
+    for (let i = 0; i < 20; i++) {
+      const market = markets[i % markets.length];
+      const user = traders[i % traders.length];
+      const at = new Date(Date.now() - (i * 3 + 1) * 60 * 60 * 1000);
+      bodies.push({
+        userId: user.id,
+        marketId: market.id,
+        body: DEMO_COMMENTS[i % DEMO_COMMENTS.length],
+        createdAt: at,
+      });
+    }
+    await prisma.marketComment.createMany({ data: bodies });
+    console.log(`Seeded ${bodies.length} demo comments.`);
+  }
+
+  // Dedicated resolved market so open books stay intact
+  const resolved = await prisma.market.findFirst({
+    where: { status: "RESOLVED", symbol: "DEMO" },
+  });
+  if (!resolved) {
+    const past = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    await prisma.market.create({
+      data: {
+        title: "Will DEMO close above $100 on demo resolve?",
+        symbol: "DEMO",
+        strike: new Prisma.Decimal(100),
+        condition: "CLOSE_ABOVE",
+        resolveDate: past,
+        status: "RESOLVED",
+        winningOutcome: "YES",
+        resolvedPrice: new Prisma.Decimal(112.5),
+        category: "STOCK",
+        description: "Seeded resolved market for Activity feed demos.",
+      },
+    });
+    console.log("Created DEMO resolved market for activity.");
+  }
+
+  await seedSocialExtras(markets, maker, traders);
+}
+
+async function seedSocialExtras(markets, maker, traders) {
+  if (!markets.length || traders.length < 2) return;
+
+  // Whale trades (qty >= 40) for Highlights filter
+  const whaleCount = await prisma.trade.count({ where: { quantity: { gte: 40 } } });
+  if (whaleCount < 3) {
+    for (let i = 0; i < 5; i++) {
+      const market = markets[i % markets.length];
+      const buyer = traders[i % traders.length];
+      const seller = traders[(i + 1) % traders.length];
+      const qty = 45 + i * 5;
+      const at = new Date(Date.now() - i * 45 * 60 * 1000);
+      const buyOrder = await prisma.order.create({
+        data: {
+          userId: buyer.id,
+          marketId: market.id,
+          outcome: "YES",
+          side: "BUY",
+          priceCents: 50 + i,
+          quantity: qty,
+          filledQty: qty,
+          status: "FILLED",
+          createdAt: at,
+        },
+      });
+      const sellOrder = await prisma.order.create({
+        data: {
+          userId: seller.id,
+          marketId: market.id,
+          outcome: "YES",
+          side: "SELL",
+          priceCents: 50 + i,
+          quantity: qty,
+          filledQty: qty,
+          status: "FILLED",
+          createdAt: at,
+        },
+      });
+      await prisma.trade.create({
+        data: {
+          marketId: market.id,
+          buyOrderId: buyOrder.id,
+          sellOrderId: sellOrder.id,
+          buyerId: buyer.id,
+          sellerId: seller.id,
+          outcome: "YES",
+          priceCents: 50 + i,
+          quantity: qty,
+          createdAt: at,
+        },
+      });
+    }
+    console.log("Seeded whale trades for Highlights.");
+  }
+
+  // Follow graph: alice → bob, bob → carol, carol → alice
+  const pairs = [
+    [traders[0], traders[1]],
+    [traders[1], traders[2] || traders[0]],
+    [traders[2] || traders[0], traders[0]],
+  ];
+  for (const [a, b] of pairs) {
+    if (!a || !b || a.id === b.id) continue;
+    await prisma.userFollow.upsert({
+      where: {
+        followerId_followingId: { followerId: a.id, followingId: b.id },
+      },
+      create: { followerId: a.id, followingId: b.id },
+      update: {},
+    });
+  }
+
+  // Likes + replies on existing top-level comments
+  const tops = await prisma.marketComment.findMany({
+    where: { parentId: null },
+    take: 8,
+    orderBy: { createdAt: "desc" },
+  });
+  for (let i = 0; i < tops.length; i++) {
+    const c = tops[i];
+    const liker = traders[i % traders.length];
+    await prisma.commentLike.upsert({
+      where: { userId_commentId: { userId: liker.id, commentId: c.id } },
+      create: { userId: liker.id, commentId: c.id },
+      update: {},
+    });
+    const replyCount = await prisma.marketComment.count({ where: { parentId: c.id } });
+    if (replyCount === 0) {
+      await prisma.marketComment.create({
+        data: {
+          userId: traders[(i + 1) % traders.length].id,
+          marketId: c.marketId,
+          parentId: c.id,
+          body: `@${(traders[i % traders.length].displayName || "trader").replace(/\s/g, "")} agreed — watching this level.`,
+          createdAt: new Date(Date.now() - i * 20 * 60 * 1000),
+        },
+      });
+    }
+  }
+
+  // Triggered alert for activity feed
+  const alertExists = await prisma.priceAlert.count({ where: { triggered: true } });
+  if (alertExists === 0 && markets[0]) {
+    await prisma.priceAlert.create({
+      data: {
+        userId: traders[0].id,
+        marketId: markets[0].id,
+        targetCents: 60,
+        direction: "ABOVE",
+        triggered: true,
+      },
+    });
+  }
+
+  console.log("Seeded follows, likes, replies, and triggered alert.");
+}
+
 async function main() {
   const adminEmail = (process.env.ADMIN_EMAIL || "admin@example.com").toLowerCase();
   const passwordHash = await bcrypt.hash("admin123", 10);
@@ -144,6 +381,27 @@ async function main() {
       balance: new Prisma.Decimal(50000),
     },
   });
+
+  const traderDefs = [
+    { email: "alice@example.com", displayName: "Alice", password: "demo123" },
+    { email: "bob@example.com", displayName: "Bob", password: "demo123" },
+    { email: "carol@example.com", displayName: "Carol", password: "demo123" },
+  ];
+  const traders = [];
+  for (const t of traderDefs) {
+    const hash = await bcrypt.hash(t.password, 10);
+    const user = await prisma.user.upsert({
+      where: { email: t.email },
+      update: { displayName: t.displayName },
+      create: {
+        email: t.email,
+        passwordHash: hash,
+        displayName: t.displayName,
+        balance: new Prisma.Decimal(10000),
+      },
+    });
+    traders.push(user);
+  }
 
   const txCount = await prisma.transaction.count({ where: { userId: admin.id } });
   if (txCount === 0) {
@@ -175,6 +433,18 @@ async function main() {
     { symbol: "SPY", strike: 500, condition: "CLOSE_BELOW", days: 45, start: 22 },
   ];
 
+  // Drop leftover past-due OPEN/CLOSED markets (they spam Finnhub resolve on startup)
+  const stale = await prisma.market.deleteMany({
+    where: {
+      status: { in: ["OPEN", "CLOSED"] },
+      resolveDate: { lt: new Date() },
+      symbol: { not: "DEMO" },
+    },
+  });
+  if (stale.count > 0) {
+    console.log(`Removed ${stale.count} past-due market(s) left from older seeds.`);
+  }
+
   // Re-open previously auto-closed demo markets that still have future resolve dates
   await prisma.market.updateMany({
     where: {
@@ -184,6 +454,7 @@ async function main() {
     data: { status: "OPEN" },
   });
 
+  const seededMarkets = [];
   for (const m of demoMarkets) {
     const resolveDate = addDays(m.days);
     const title = marketTitle(m.symbol, m.strike, m.condition, resolveDate);
@@ -225,10 +496,14 @@ async function main() {
 
     await seedPriceHistory(market.id, m.start);
     await seedOrderBook(market.id, m.start, maker.id);
+    seededMarkets.push(market);
   }
 
-  console.log("Seed complete — markets + chart history + order book depth ready.");
+  await seedActivity(seededMarkets, maker, traders);
+
+  console.log("Seed complete — markets + charts + order book + activity ready.");
   console.log(`Admin login: ${adminEmail} / admin123`);
+  console.log("Demo traders: alice@example.com / bob@example.com / carol@example.com (password: demo123)");
 }
 
 main()

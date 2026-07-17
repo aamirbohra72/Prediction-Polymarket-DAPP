@@ -62,6 +62,7 @@ export async function emitMarketResolved(payload) {
     await invalidateUserCache(p.userId);
   }
   await invalidateLeaderboard();
+  await invalidateActivityCache();
 }
 
 export async function emitOrderPlaced(payload) {
@@ -74,4 +75,5 @@ export async function emitOrderPlaced(payload) {
     return;
   }
   await invalidateUserCache(payload.userId);
+  await invalidateActivityCache();
 }

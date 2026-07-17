@@ -108,3 +108,102 @@ export function getMarketExecutionPrice(book, outcome, side) {
   }
   return side === "BUY" ? book.bestNoAsk : book.bestNoBid;
 }
+
+/**
+ * Lightweight book summaries for MANY markets in a fixed number of queries.
+ * Avoids the N+1 explosion of calling getOrderBookSnapshot() per market on the
+ * list page. Returns Map<marketId, { impliedYesPrice, spread, volume, best* }>.
+ */
+export async function getMarketBookSummaries(marketIds) {
+  const summaries = new Map();
+  if (!marketIds.length) return summaries;
+
+  const [openOrders, volumeByMarket, lastTrades] = await Promise.all([
+    prisma.order.findMany({
+      where: { marketId: { in: marketIds }, status: "OPEN" },
+      select: { marketId: true, outcome: true, side: true, priceCents: true },
+    }),
+    prisma.trade.groupBy({
+      by: ["marketId"],
+      where: { marketId: { in: marketIds } },
+      _sum: { quantity: true },
+    }),
+    prisma.trade.findMany({
+      where: { marketId: { in: marketIds } },
+      orderBy: { createdAt: "desc" },
+      distinct: ["marketId"],
+      select: { marketId: true, outcome: true, priceCents: true },
+    }),
+  ]);
+
+  const volumeMap = new Map(
+    volumeByMarket.map((v) => [v.marketId, v._sum.quantity ?? 0])
+  );
+  const lastTradeMap = new Map(lastTrades.map((t) => [t.marketId, t]));
+
+  // Group best prices per market in a single pass.
+  const best = new Map();
+  for (const id of marketIds) {
+    best.set(id, {
+      bestYesBid: null,
+      bestYesAsk: null,
+      bestNoBid: null,
+      bestNoAsk: null,
+    });
+  }
+  for (const o of openOrders) {
+    const b = best.get(o.marketId);
+    if (!b) continue;
+    if (o.outcome === "YES" && o.side === "BUY") {
+      b.bestYesBid = b.bestYesBid == null ? o.priceCents : Math.max(b.bestYesBid, o.priceCents);
+    } else if (o.outcome === "YES" && o.side === "SELL") {
+      b.bestYesAsk = b.bestYesAsk == null ? o.priceCents : Math.min(b.bestYesAsk, o.priceCents);
+    } else if (o.outcome === "NO" && o.side === "BUY") {
+      b.bestNoBid = b.bestNoBid == null ? o.priceCents : Math.max(b.bestNoBid, o.priceCents);
+    } else if (o.outcome === "NO" && o.side === "SELL") {
+      b.bestNoAsk = b.bestNoAsk == null ? o.priceCents : Math.min(b.bestNoAsk, o.priceCents);
+    }
+  }
+
+  for (const id of marketIds) {
+    const b = best.get(id);
+    const lastTrade = lastTradeMap.get(id);
+
+    let impliedYesPrice =
+      b.bestYesAsk != null && b.bestYesBid != null
+        ? Math.round((b.bestYesAsk + b.bestYesBid) / 2)
+        : b.bestYesAsk ?? b.bestYesBid ?? null;
+    if (impliedYesPrice == null && lastTrade?.outcome === "YES") {
+      impliedYesPrice = lastTrade.priceCents;
+    }
+    if (impliedYesPrice == null) impliedYesPrice = 50;
+
+    const spread =
+      b.bestYesAsk != null && b.bestYesBid != null ? b.bestYesAsk - b.bestYesBid : null;
+
+    summaries.set(id, {
+      ...b,
+      spread,
+      impliedYesPrice,
+      volume: volumeMap.get(id) ?? 0,
+    });
+  }
+
+  return summaries;
+}
+
+/** Batched open interest for many markets (single groupBy query). */
+export async function getOpenInterestForMarkets(marketIds) {
+  const map = new Map();
+  if (!marketIds.length) return map;
+
+  const grouped = await prisma.position.groupBy({
+    by: ["marketId"],
+    where: { marketId: { in: marketIds } },
+    _sum: { yesShares: true, noShares: true },
+  });
+  for (const g of grouped) {
+    map.set(g.marketId, (g._sum.yesShares ?? 0) + (g._sum.noShares ?? 0));
+  }
+  return map;
+}
