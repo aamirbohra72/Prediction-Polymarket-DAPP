@@ -15,12 +15,30 @@ export default function Nav() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-    api
-      .me()
-      .then((d) => setUser(d.user))
-      .catch(() => setToken(null));
+    function loadUser() {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setUser(null);
+        return;
+      }
+      api
+        .me()
+        .then((d) => setUser(d.user))
+        .catch(() => {
+          localStorage.removeItem("token");
+          setUser(null);
+        });
+    }
+
+    loadUser();
+    // Re-fetch when login/logout happens in this tab (custom event from
+    // setToken) or in another tab (native storage event).
+    window.addEventListener("auth-changed", loadUser);
+    window.addEventListener("storage", loadUser);
+    return () => {
+      window.removeEventListener("auth-changed", loadUser);
+      window.removeEventListener("storage", loadUser);
+    };
   }, []);
 
   function logout() {
@@ -72,8 +90,12 @@ export default function Nav() {
             </Link>
           ))}
           {user?.isAdmin && (
-            <Link href="/admin" className="hover:text-[var(--text)]">
-              Admin
+            <Link
+              href="/admin"
+              className="flex items-center gap-1.5 rounded-lg border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-3 py-1.5 font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/20"
+              title="Admin dashboard — manage markets & automation"
+            >
+              <span aria-hidden>⚙</span> Admin
             </Link>
           )}
         </nav>
@@ -86,10 +108,17 @@ export default function Nav() {
               <NotificationBell />
               <Link
                 href="/profile"
-                className="hidden max-w-[10rem] truncate rounded-full bg-[var(--bg)] px-3 py-1.5 text-sm font-medium hover:text-[var(--accent)] sm:inline"
+                className="hidden max-w-[12rem] items-center gap-1.5 truncate rounded-full bg-[var(--bg)] px-3 py-1.5 text-sm font-medium hover:text-[var(--accent)] sm:inline-flex"
                 title={user.email}
               >
-                {user.displayName || user.email?.split("@")[0] || "Account"}
+                <span className="truncate">
+                  {user.displayName || user.email?.split("@")[0] || "Account"}
+                </span>
+                {user.isAdmin && (
+                  <span className="rounded bg-[var(--accent)]/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">
+                    Admin
+                  </span>
+                )}
               </Link>
               <button
                 type="button"
@@ -141,8 +170,12 @@ export default function Nav() {
               </Link>
             ))}
             {user?.isAdmin && (
-              <Link href="/admin" onClick={() => setMenuOpen(false)}>
-                Admin
+              <Link
+                href="/admin"
+                onClick={() => setMenuOpen(false)}
+                className="flex w-fit items-center gap-1.5 rounded-lg border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-3 py-1.5 font-medium text-[var(--accent)]"
+              >
+                <span aria-hidden>⚙</span> Admin dashboard
               </Link>
             )}
             {!user && (

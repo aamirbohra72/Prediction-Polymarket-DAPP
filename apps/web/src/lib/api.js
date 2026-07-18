@@ -11,6 +11,9 @@ export function setToken(token) {
   if (typeof window === "undefined") return;
   if (token) localStorage.setItem("token", token);
   else localStorage.removeItem("token");
+  // Nav (in the root layout) only mounts once; tell it auth state changed
+  // so it re-fetches the user after client-side login/logout navigation.
+  window.dispatchEvent(new Event("auth-changed"));
 }
 
 async function request(path, options = {}) {
