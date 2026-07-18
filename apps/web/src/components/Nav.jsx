@@ -86,9 +86,10 @@ export default function Nav() {
               <NotificationBell />
               <Link
                 href="/profile"
-                className="hidden rounded-full bg-[var(--bg)] px-3 py-1.5 text-sm sm:inline"
+                className="hidden max-w-[10rem] truncate rounded-full bg-[var(--bg)] px-3 py-1.5 text-sm font-medium hover:text-[var(--accent)] sm:inline"
+                title={user.email}
               >
-                ${user.balance.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                {user.displayName || user.email?.split("@")[0] || "Account"}
               </Link>
               <button
                 type="button"
@@ -155,9 +156,14 @@ export default function Nav() {
               </>
             )}
             {user && (
-              <button type="button" onClick={logout} className="text-left">
-                Log out
-              </button>
+              <>
+                <Link href="/profile" onClick={() => setMenuOpen(false)} className="font-medium">
+                  {user.displayName || user.email?.split("@")[0] || "Account"}
+                </Link>
+                <button type="button" onClick={logout} className="text-left">
+                  Log out
+                </button>
+              </>
             )}
           </div>
         </div>
